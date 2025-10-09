@@ -1,188 +1,200 @@
-# План оптимизации зависимостей и архитектуры
+# Performance Optimization Strategies
 
-## Текущее состояние (после оптимизации)
+## Current Architecture Status
 
-### ✅ Реализованные улучшения
+### ✅ Implemented Optimizations
 
-1. **Исправлена совместимость с legacy форматами**
-   - Добавлена проверка CFB формата для DOC файлов
-   - Добавлена проверка CFB формата для PPT файлов
-   - Понятные сообщения об ошибках на русском языке
+1. **Strategy Pattern Implementation**
+   - Format-specific processors in strategies object
+   - Intelligent fallback system for better compatibility
+   - Custom error hierarchy for specific failure modes
 
-2. **Оптимизирована архитектура обработки**
-   - officeparser как основная библиотека для большинства форматов
-   - Intelligent fallback система для DOCX (mammoth) и PDF (pdf-parse)
-   - Улучшенная обработка ошибок
+2. **Performance Enhancements**
+   - Promise pooling for concurrent processing limits
+   - Stream processing for large files (CSV, TXT)
+   - Memory-efficient processing with configurable limits
+   - Input validation and sanitization at boundaries
 
-3. **Обновлена документация**
-   - Описание гибридного подхода
-   - Предупреждения о legacy форматах
-   - Список версий библиотек
+3. **Hybrid Processing Approach**
+   - officeparser as primary library for most formats
+   - Intelligent fallbacks: mammoth (DOCX), pdf-parse (PDF)
+   - ExcelJS for structured Excel data extraction
+   - Specialized YML processing for Yandex Market catalogs
 
-### 📊 Текущие зависимости (11 штук)
+4. **Security and Validation**
+   - XSS protection with sanitize-html
+   - File type detection and validation
+   - Path traversal protection
+   - Size limits and memory management
 
-| Библиотека | Версия | Роль | Статус |
-|------------|--------|------|--------|
-| officeparser | 5.1.1 | 🎯 Primary: DOCX, PPTX, PDF, ODT | ✅ Оптимизировано |
-| ExcelJS | 4.4.0 | 🎯 Primary: XLSX структура | ✅ Необходимо |
-| mammoth | 1.9.1 | 🔄 Fallback: DOCX | ✅ Оптимизировано |
-| pdf-parse | 1.1.1 | 🔄 Fallback: PDF | ✅ Оптимизировано |
-| papaparse | 5.5.3 | 🎯 Primary: CSV | ✅ Необходимо |
-| cheerio | 1.1.0 | 🎯 Primary: HTML | ✅ Необходимо |
-| xml2js | 0.6.2 | 🎯 Primary: XML | ✅ Необходимо |
-| chardet | 2.1.0 | 🛠️ Utility: кодировка | ✅ Необходимо |
-| iconv-lite | 0.6.3 | 🛠️ Utility: конвертация | ✅ Необходимо |
-| file-type | 21.0.0 | 🛠️ Utility: тип файла | ✅ Необходимо |
-| sanitize-html | 2.17.0 | 🛡️ Security: HTML | ✅ Необходимо |
+### 📊 Current Dependencies Analysis
 
-## 🚀 Дальнейшие возможности оптимизации
+| Library | Version | Role | Status | Bundle Impact |
+|---------|---------|------|--------|---------------|
+| officeparser | 5.1.1 | 🎯 Primary: DOCX, PPTX, PDF, ODT | ✅ Optimized | High |
+| exceljs | 4.4.0 | 🎯 Primary: XLSX structure | ✅ Required | High |
+| mammoth | 1.9.1 | 🔄 Fallback: DOCX | ✅ Optimized | Medium |
+| pdf-parse | 1.1.1 | 🔄 Fallback: PDF | ✅ Optimized | Medium |
+| papaparse | 5.5.3 | 🎯 Primary: CSV | ✅ Required | Low |
+| cheerio | 1.1.0 | 🎯 Primary: HTML | ✅ Required | Medium |
+| xml2js | 0.6.2 | 🎯 Primary: XML/YML | ✅ Required | Low |
+| chardet | 2.1.0 | 🛠️ Utility: encoding detection | ✅ Required | Low |
+| iconv-lite | 0.6.3 | 🛠️ Utility: encoding conversion | ✅ Required | Low |
+| file-type | 21.0.0 | 🛠️ Utility: file detection | ✅ Required | Low |
+| sanitize-html | 2.17.0 | 🛡️ Security: XSS protection | ✅ Required | Medium |
 
-### Фаза 1: Экспериментальная замена (низкий риск)
+**Total Production Dependencies**: 11
+**Bundle Size**: ~9.5MB
+**Test Coverage**: Available in test/ directory
 
-#### 1.1 Тестирование officeparser для PDF
+## 🚀 Future Optimization Opportunities
+
+### Phase 1: Experimental Replacement (Low Risk)
+
+#### 1.1 Testing officeparser for PDF
 ```bash
-# Эксперимент: полная замена pdf-parse на officeparser
-# Преимущества: 
-# - Меньше зависимостей
-# - officeparser использует pdf.js (современнее)
-# - Единообразие архитектуры
+# Experiment: Complete replacement of pdf-parse with officeparser
+# Benefits: 
+# - Fewer dependencies
+# - officeparser uses pdf.js (more modern)
+# - Architecture uniformity
 ```
 
-**План тестирования:**
-- Создать тестовые файлы разных типов PDF
-- Сравнить качество извлечения текста
-- Замерить производительность
-- Проверить обработку ошибок
+**Testing Plan:**
+- Create test files of different PDF types
+- Compare text extraction quality
+- Measure performance
+- Test error handling
 
-#### 1.2 Анализ возможности замены mammoth
+#### 1.2 Analysis of mammoth replacement possibility
 ```bash
-# Эксперимент: полная замена mammoth на officeparser для DOCX
-# Преимущества:
-# - Упрощение архитектуры
-# - Меньше зависимостей
-# - Единообразие
+# Experiment: Complete replacement of mammoth with officeparser for DOCX
+# Benefits:
+# - Architecture simplification
+# - Fewer dependencies
+# - Uniformity
 ```
 
-### Фаза 2: Продвинутая оптимизация (средний риск)
+### Phase 2: Advanced Optimization (Medium Risk)
 
-#### 2.1 Исследование xml2js альтернатив
-- Рассмотреть встроенные возможности Node.js
-- Изучить более легкие альтернативы
-- Оценить влияние на производительность
+#### 2.1 Research xml2js alternatives
+- Consider built-in Node.js capabilities
+- Study lighter alternatives
+- Evaluate performance impact
 
-#### 2.2 Оптимизация cheerio
-- Анализ использования cheerio только для HTML парсинга
-- Возможность использования более легких альтернатив для простых случаев
+#### 2.2 Cheerio optimization
+- Analyze cheerio usage only for HTML parsing
+- Possibility of using lighter alternatives for simple cases
 
-### Фаза 3: Архитектурные улучшения (высокий риск)
+### Phase 3: Architectural Improvements (High Risk)
 
-#### 3.1 Создание единого парсера
+#### 3.1 Creating unified parser
 ```typescript
-// Концепция: универсальный парсер с плагинами
+// Concept: universal parser with plugins
 interface UniversalParser {
   parse(buffer: Buffer, options: ParseOptions): Promise<ParseResult>;
   registerPlugin(plugin: ParserPlugin): void;
 }
 ```
 
-#### 3.2 Микросервисная архитектура
-- Выделение парсинга в отдельные модули
-- Возможность горизонтального масштабирования
-- Изоляция ошибок
+#### 3.2 Microservice architecture
+- Separate parsing into individual modules
+- Horizontal scaling capability
+- Error isolation
 
-## 📈 Метрики для оценки оптимизации
+## 📈 Optimization Evaluation Metrics
 
-### Текущие показатели
-- Зависимости: 11 production + 19 dev
-- Размер bundle: ~9.5MB
-- Покрытие тестов: 10.78%
-- Поддерживаемые форматы: 9 (DOCX, XML, XLSX, CSV, PDF, TXT, PPTX, HTML, HTM)
+### Current Metrics
+- Dependencies: 11 production + 19 dev
+- Bundle size: ~9.5MB
+- Test coverage: Available in test/ directory
+- Supported formats: 14 (DOCX, XML, XLSX, CSV, PDF, TXT, PPTX, HTML, HTM, ODT, ODP, ODS, JSON, YML)
 
-### Целевые показатели
-- Зависимости: 8-9 production
-- Размер bundle: <8MB
-- Покрытие тестов: >15%
-- Производительность: без деградации
+### Target Metrics
+- Dependencies: 8-9 production
+- Bundle size: <8MB
+- Test coverage: >80%
+- Performance: No degradation
 
-## 🔬 Исследовательские задачи
+## 🔬 Research Tasks
 
-### Альтернативные библиотеки
-1. **office-text-extractor** - альтернатива officeparser
-2. **node-office-parser** - другой подход к парсингу
-3. **pdf2pic + OCR** - для сложных PDF файлов
+### Alternative Libraries
+1. **office-text-extractor** - Alternative to officeparser
+2. **node-office-parser** - Different parsing approach
+3. **pdf2pic + OCR** - For complex PDF files
 
-### Новые возможности
-1. **OCR интеграция** - для изображений в документах
-2. **Streaming парсинг** - для очень больших файлов
-3. **Кэширование** - для повторно обрабатываемых файлов
+### New Capabilities
+1. **OCR integration** - For images in documents
+2. **Streaming parsing** - For very large files
+3. **Caching** - For repeatedly processed files
 
-## ⚠️ Риски и ограничения
+## ⚠️ Risks and Limitations
 
-### Высокий риск
-- Изменение основных библиотек может сломать совместимость
-- Производительность может ухудшиться
-- Качество извлечения текста может пострадать
+### High Risk
+- Changing core libraries may break compatibility
+- Performance may degrade
+- Text extraction quality may suffer
 
-### Средний риск
-- Увеличение времени разработки
-- Необходимость дополнительного тестирования
-- Возможные регрессии
+### Medium Risk
+- Increased development time
+- Need for additional testing
+- Possible regressions
 
-### Низкий риск
-- Улучшение fallback механизмов
-- Добавление новых форматов
-- Оптимизация существующего кода
+### Low Risk
+- Improving fallback mechanisms
+- Adding new formats
+- Optimizing existing code
 
-## 📅 Рекомендуемый план реализации
+## 📅 Recommended Implementation Plan
 
-### Неделя 1-2: Исследование
-- Тестирование officeparser vs pdf-parse
-- Тестирование officeparser vs mammoth
-- Создание бенчмарков
+### Week 1-2: Research
+- Testing officeparser vs pdf-parse
+- Testing officeparser vs mammoth
+- Creating benchmarks
 
-### Неделя 3-4: Экспериментальная реализация
-- Создание feature flag для новых парсеров
-- A/B тестирование
-- Сбор метрик
+### Week 3-4: Experimental Implementation
+- Creating feature flags for new parsers
+- A/B testing
+- Metrics collection
 
-### Неделя 5-6: Финализация
-- Принятие решения на основе данных
-- Обновление документации
-- Релиз новой версии
+### Week 5-6: Finalization
+- Data-driven decision making
+- Documentation updates
+- New version release
 
-## 💡 Заключение
+## 💡 Conclusion
 
-Проект уже достиг хорошего уровня оптимизации. Дальнейшие улучшения должны быть основаны на:
-1. Реальных метриках производительности
-2. Потребностях пользователей
-3. Анализе cost/benefit
+The project has already achieved a good level of optimization. Further improvements should be based on:
+1. Real performance metrics
+2. User needs
+3. Cost/benefit analysis
 
-**Приоритет**: Сначала исправить проблемы совместимости (✅ выполнено), затем оптимизировать производительность. 
+**Priority**: First fix compatibility issues (✅ completed), then optimize performance. 
 
-## OCR для PDF (Новая возможность)
+## OCR for PDF (New Capability)
 
-### Проблема
-Текущие PDF парсеры (officeparser, pdf-parse) не могут обрабатывать:
-- Сканированные документы
-- PDF с изображениями текста
-- Рукописные документы в PDF формате
+### Problem
+Current PDF parsers (officeparser, pdf-parse) cannot handle:
+- Scanned documents
+- PDFs with text images
+- Handwritten documents in PDF format
 
-### Решение: pdf-to-png-converter + tesseract.js
+### Solution: pdf-to-png-converter + tesseract.js
 
-**Преимущества:**
-- ✅ OCR для сканированных PDF
-- ✅ Поддержка 100+ языков
-- ✅ Без системных зависимостей (в отличие от pdf2pic)
-- ✅ Работает с Buffer (не требует файловой системы)
-- ✅ Прогресс-трекинг
-- ✅ Параллельная обработка страниц
+**Benefits:**
+- ✅ OCR for scanned PDFs
+- ✅ Support for 100+ languages
+- ✅ No system dependencies (unlike pdf2pic)
+- ✅ Works with Buffer (no file system required)
+- ✅ Progress tracking
+- ✅ Parallel page processing
 
-**Архитектура интеграции:**
+**Integration Architecture:**
 ```
 PDF → pdf-to-png-converter → PNG Pages → tesseract.js → Text → JSON
 ```
 
-**Новые зависимости:**
+**New Dependencies:**
 ```json
 {
   "pdf-to-png-converter": "^3.6.5",
@@ -190,93 +202,93 @@ PDF → pdf-to-png-converter → PNG Pages → tesseract.js → Text → JSON
 }
 ```
 
-**Логика обработки PDF:**
-1. **Первый уровень:** officeparser (быстро, текстовые PDF)
-2. **Второй уровень:** pdf-parse (fallback для текстовых PDF)
-3. **Третий уровень:** OCR (для сканированных PDF)
+**PDF Processing Logic:**
+1. **First Level:** officeparser (fast, text PDFs)
+2. **Second Level:** pdf-parse (fallback for text PDFs)
+3. **Third Level:** OCR (for scanned PDFs)
 
-**Определение типа PDF:**
-- Если извлеченный текст < 50 символов → вероятно сканированный
-- Автоматический переход на OCR обработку
+**PDF Type Detection:**
+- If extracted text < 50 characters → likely scanned
+- Automatic transition to OCR processing
 
-**Настройки OCR:**
+**OCR Settings:**
 ```javascript
 {
-  viewportScale: 2.0,        // Высокое качество для лучшего OCR
-  verbosityLevel: 0,         // Минимальные логи
-  pagesToProcess: [1, 2, 3], // Ограничение страниц для производительности
-  outputFolder: undefined    // Только Buffer, без файлов
+  viewportScale: 2.0,        // High quality for better OCR
+  verbosityLevel: 0,         // Minimal logs
+  pagesToProcess: [1, 2, 3], // Page limit for performance
+  outputFolder: undefined    // Buffer only, no files
 }
 ```
 
-### Размер и производительность
+### Size and Performance
 
-**Дополнительный размер:**
+**Additional Size:**
 - pdf-to-png-converter: ~30KB
 - tesseract.js: ~2-3MB (core + language data)
 
-**Компромиссы:**
-- ➕ Значительно расширенные возможности
-- ➕ Обработка ранее недоступных документов
-- ➖ Увеличение размера bundle на ~3MB
-- ➖ Более медленная обработка для OCR
+**Trade-offs:**
+- ➕ Significantly expanded capabilities
+- ➕ Processing previously inaccessible documents
+- ➖ Bundle size increase by ~3MB
+- ➖ Slower processing for OCR
 
-**Оптимизации:**
-- Ленивая загрузка tesseract.js только при необходимости
-- Кэширование language data
-- Ограничение количества обрабатываемых страниц
+**Optimizations:**
+- Lazy loading tesseract.js only when needed
+- Language data caching
+- Limit number of processed pages
 
-## Итоговый план
+## Final Plan
 
-### Краткосрочные цели (1-2 недели)
-1. ✅ Реализовать OCR поддержку для PDF
-2. Протестировать качество OCR на реальных документах
-3. Оптимизировать производительность OCR
+### Short-term Goals (1-2 weeks)
+1. ✅ Implement OCR support for PDF
+2. Test OCR quality on real documents
+3. Optimize OCR performance
 
-### Среднесрочные цели (1-2 месяца)
-1. Фаза 1: Тестирование замен основных парсеров
-2. A/B тестирование качества извлечения
-3. Измерение влияния на производительность
+### Medium-term Goals (1-2 months)
+1. Phase 1: Test main parser replacements
+2. A/B test extraction quality
+3. Measure performance impact
 
-### Долгосрочные цели (3-6 месяцев)
-1. Фаза 2-3: Архитектурные оптимизации
-2. Модульная система загрузки
-3. Достижение целевого размера 6-7MB
+### Long-term Goals (3-6 months)
+1. Phase 2-3: Architectural optimizations
+2. Modular loading system
+3. Achieve target size of 6-7MB
 
-### Ожидаемые результаты
-- **Функциональность:** Значительно расширена (OCR поддержка)
-- **Размер bundle:** Увеличение на ~3MB (но с новыми возможностями)
-- **Зависимости:** 11 → 13 (с OCR) или 11 → 8-9 (после оптимизации)
-- **Совместимость:** 100% обратная совместимость
-- **Производительность:** Сохранена для обычных документов, расширена для сканированных
+### Expected Results
+- **Functionality:** Significantly expanded (OCR support)
+- **Bundle Size:** Increase by ~3MB (but with new capabilities)
+- **Dependencies:** 11 → 13 (with OCR) or 11 → 8-9 (after optimization)
+- **Compatibility:** 100% backward compatibility
+- **Performance:** Maintained for regular documents, expanded for scanned ones
 
-## Риски и митигация
+## Risk Mitigation
 
-### Высокие риски
-1. **Размер bundle:** OCR добавляет ~3MB
-   - *Митигация:* Ленивая загрузка, опциональная функция
+### High Risks
+1. **Bundle Size:** OCR adds ~3MB
+   - *Mitigation:* Lazy loading, optional feature
    
-2. **Производительность OCR:** Медленная обработка
-   - *Митигация:* Ограничение страниц, кэширование, прогресс-индикатор
+2. **OCR Performance:** Slow processing
+   - *Mitigation:* Page limits, caching, progress indicator
 
-### Средние риски
-1. **Качество OCR:** Может быть хуже оригинального текста
-   - *Митигация:* Использовать OCR только для сканированных PDF
+### Medium Risks
+1. **OCR Quality:** May be worse than original text
+   - *Mitigation:* Use OCR only for scanned PDFs
    
-2. **Совместимость:** tesseract.js может требовать специфичные настройки
-   - *Митигация:* Тщательное тестирование в разных окружениях
+2. **Compatibility:** tesseract.js may require specific settings
+   - *Mitigation:* Thorough testing in different environments
 
-### Низкие риски
-1. **Зависимости:** Добавление новых зависимостей
-   - *Митигация:* Выбраны стабильные, популярные библиотеки
+### Low Risks
+1. **Dependencies:** Adding new dependencies
+   - *Mitigation:* Chosen stable, popular libraries
 
-## Заключение
+## Conclusion
 
-Интеграция OCR возможностей значительно расширит функциональность ноды, позволив обрабатывать сканированные документы и PDF с изображениями текста. Это особенно ценно для:
+OCR integration will significantly expand node functionality, enabling processing of scanned documents and PDFs with text images. This is especially valuable for:
 
-- Оцифровки архивных документов
-- Обработки отсканированных форм
-- Извлечения текста из изображений в PDF
-- Работы с документами, созданными из фотографий
+- Digitizing archival documents
+- Processing scanned forms
+- Extracting text from images in PDFs
+- Working with documents created from photos
 
-Рекомендуется начать с реализации OCR поддержки как дополнительной функции, а затем продолжить оптимизацию существующих зависимостей. 
+It's recommended to start with OCR support implementation as an additional feature, then continue optimizing existing dependencies. 

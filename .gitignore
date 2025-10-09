@@ -19,6 +19,8 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+.cursor/
+.kiro/
 *.swp
 
 # Env
@@ -30,6 +32,7 @@ coverage/
 
 # Misc
 *.log
-*.tmp 
+*.tmp
+nul
 # Prevent webpack artifacts
 bundle/*[0-9]*.FileToJsonNode.node.js

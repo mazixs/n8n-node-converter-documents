@@ -1,8 +1,33 @@
 # n8n-nodes-converter-documents
 
-## 📄 Description
+## 📄 Product Overview
 
-This is a custom node for n8n designed to convert various file formats to JSON or text format. Supported formats: **DOCX**, **XML**, **YML**, **XLSX**, **CSV**, **PDF**, **TXT**, **PPTX**, **HTML/HTM**, **ODT**, **ODP**, **ODS**, **JSON**.
+This is an n8n community node package that converts various document formats to JSON or text format. The node supports a wide range of file types including:
+
+- **Office Documents**: DOCX, PPTX, XLSX (modern formats only)
+- **OpenDocument**: ODT, ODP, ODS (LibreOffice/OpenOffice)
+- **Data Formats**: XML, YML, CSV, JSON, PDF, TXT, HTML/HTM
+- **Special Support**: Yandex Market YML catalogs with structured parsing
+
+## Key Features
+
+- Automatic file type detection by extension or content analysis
+- Hybrid processing approach with primary and fallback parsers
+- Security-focused with input validation and XSS protection
+- Memory-efficient streaming for large files
+- JSON structure normalization (flattens nested objects)
+- Comprehensive error handling with custom error types
+- Performance optimizations with concurrent processing limits
+
+## Architecture Philosophy
+
+The node uses a strategy pattern with format-specific processors and intelligent fallbacks. Primary library is `officeparser` with specialized fallbacks like `mammoth` for DOCX and `pdf-parse` for PDFs. This provides better compatibility and error resilience.
+
+## Limitations
+
+- Legacy Microsoft Office files (DOC, PPT, XLS) are not supported due to CFB format complexity
+- Large files (tens of MB, hundreds of thousands of rows) may cause memory issues
+- Maximum file size limit of 50MB (configurable)
 
 ### ⚠️ Important Note about Legacy Microsoft Office Files
 
@@ -33,7 +58,16 @@ This is a custom node for n8n designed to convert various file formats to JSON o
 
 > **Note**: If you have old DOC/PPT files, please save them as DOCX/PPTX in Microsoft Office and try again.
 
-## 🏗️ Architecture & Performance Optimizations
+## 🏗️ Technology Stack & Architecture
+
+### Core Technologies
+
+- **Runtime**: Node.js with TypeScript (ES2020 target)
+- **Module System**: CommonJS
+- **Package Manager**: npm with package-lock.json
+- **Build System**: TypeScript compiler + Webpack bundling
+
+### Architecture & Performance Optimizations
 
 The node uses a hybrid approach with **officeparser** as the primary library for most document formats, with intelligent fallbacks:
 
@@ -51,6 +85,14 @@ This approach provides:
 - ✅ Performance optimization
 - ✅ Reduced dependency complexity
 
+### Development Patterns
+
+- Strategy pattern for file format processors
+- Custom error classes for different failure modes
+- Promise pooling for concurrent processing limits
+- Stream processing for large files
+- Comprehensive input validation and sanitization
+
 ## ⚠️ Important: Large File Limitations
 
 - **PDF, XLSX:** The libraries used load the entire file into memory. When processing very large files (tens of megabytes, hundreds of thousands of rows), crashes, freezes, and memory limit exceeded errors are possible. For such cases, it's recommended to split files into smaller parts.
@@ -58,41 +100,79 @@ This approach provides:
 ## 🔒 Security and Validation
 
 - Input data undergoes strict validation (type, structure, size, presence of binary data)
-- For HTML/HTM, sanitize-html is used to protect against XSS and malicious scripts
+- Path traversal protection for file names
+- XSS protection using sanitize-html for HTML content
+- File size limits and memory management
 - **Security updates:** Replaced vulnerable libraries with secure alternatives (textract → officeparser)
 - Regular dependency checks using npm audit and audit-ci
+- See [Security Documentation](docs/security.md) for detailed security considerations
 
-## 🚀 Features
+## 🚀 Output Data Structure
 
-- Automatic file type detection by extension or content
-- Text or table extraction from popular office and text formats
-- **OpenDocument support**: ODT, ODP, ODS files from LibreOffice/OpenOffice
-- **JSON normalization**: Automatic flattening of nested JSON structures
-- Output data: `{ text: "..." }` or `{ sheets: {...} }` + metadata (name, size, file type, processing time)
-- Large file processing (up to 50 MB for most formats)
-- Messages for empty or unsupported files
-- Protection against malicious data and XSS
-- Clear error messages for unsupported formats (e.g., old PPT files)
+- **Text formats**: `{ text: "..." }` + metadata (name, size, file type, processing time)
+- **Tabular formats**: `{ sheets: {...} }` + metadata for structured data
+- **Metadata**: Includes file name, size, type, and processing timestamp
+- **Error handling**: Clear error messages for unsupported formats (e.g., old PPT files)
+- **Warnings**: Informative messages for large files or processing limitations
 
-## 📚 Libraries Used
+## 📚 Key Dependencies
 
-This project uses modern, actively maintained libraries:
+### Document Processing Libraries
+- `officeparser` (v5.1.1) - Primary document parser with PDF.js support
+- `mammoth` (v1.9.1) - DOCX fallback processor
+- `exceljs` (v4.4.0) - Excel file processing with full feature support
+- `pdf-parse` (v1.1.1) - PDF fallback processor
+- `cheerio` (v1.1.0) - HTML/XML processing
+- `papaparse` (v5.5.3) - CSV processing
+- `xml2js` (v0.6.2) - XML parsing
 
-- **officeparser** (v5.1.1) - Primary document parser with built-in PDF.js support
-- **ExcelJS** (v4.4.0) - Excel file processing with full feature support  
-- **mammoth** (v1.9.1) - DOCX fallback processor
-- **pdf-parse** (v1.1.1) - PDF fallback processor
-- **cheerio** (v1.1.0) - HTML/XML processing
-- **papaparse** (v5.5.3) - CSV processing
-- **xml2js** (v0.6.2) - XML parsing
+### Utility Libraries
+- `chardet` (v2.1.0) - Character encoding detection
+- `iconv-lite` (v0.6.3) - Character encoding conversion
+- `file-type` (v21.0.0) - File type detection
+- `sanitize-html` (v2.17.0) - XSS protection
 
-## 🔧 CI/CD and Code Quality
+### n8n Integration
+- `n8n-workflow` - Peer dependency for n8n node development
 
-- **GitHub Actions:** automatic testing on Node.js 18.x and 20.x
-- **Linting:** ESLint with TypeScript support
-- **Testing:** Jest with code coverage
-- **Security:** automatic vulnerability checks
-- **Build:** TypeScript compilation with type checking
+## 🔧 Build Commands
+
+### Development
+```bash
+npm run dev          # TypeScript watch mode
+npm run build        # Compile TypeScript to dist/
+npm run lint         # ESLint with TypeScript support
+npm run lint:fix     # Auto-fix linting issues
+```
+
+### Testing
+```bash
+npm test             # Run Jest test suite
+npm run test:watch   # Jest in watch mode
+npm run test:coverage # Generate coverage reports
+```
+
+### Distribution
+```bash
+npm run bundle       # Create webpack bundle for distribution
+npm run standalone   # Generate standalone version with dependencies
+npm run clean        # Remove dist/, coverage/, bundle/ directories
+```
+
+### Release Management
+```bash
+npm run version:patch   # Bump patch version
+npm run version:minor   # Bump minor version
+npm run version:major   # Bump major version
+npm run release:patch   # Version bump + git push + tags
+```
+
+## 🔧 Build Configuration
+
+- **TypeScript**: Strict mode enabled, ES2020 target, CommonJS modules
+- **Webpack**: Production bundle with externals for n8n modules
+- **ESLint**: Modern flat config with TypeScript rules
+- **Jest**: ts-jest preset with 30s timeout for file processing tests
 
 ## 📊 Input and Output Data Examples
 
@@ -195,13 +275,69 @@ This project uses modern, actively maintained libraries:
 
 ## 📁 Project Structure
 
-- `src/` — source code folder (main logic)
-- `helpers.ts` — helper functions
-- `errors.ts` — custom error classes
-- `test/` — test files and unit tests folder
-- `package.json` — dependencies and scripts file
-- `.github/workflows/` — CI/CD configuration
-- `.gitignore` — excludes node_modules, dist and temporary files from git
+```
+├── src/                    # Source code (TypeScript)
+├── dist/                   # Compiled JavaScript output
+├── test/                   # Test files and fixtures
+├── docs/                   # Documentation and guides
+├── bundle/                 # Webpack bundled output
+├── standalone/             # Standalone distribution
+├── .github/                # GitHub Actions CI/CD
+└── .kiro/                  # Kiro IDE configuration
+```
+
+### Source Code Organization (`src/`)
+
+- `FileToJsonNode.node.ts` - Main n8n node implementation with strategy pattern
+- `helpers.ts` - Utility functions for document processing
+- `errors.ts` - Custom error classes for different failure modes
+- `icon.svg` - Node icon for n8n interface
+
+### Test Structure (`test/`)
+
+- `unit/` - Unit tests for individual components
+- `integration/` - Integration tests with real files
+- `samples/` - Test files for various formats
+- `fixtures/` - Test data and expected outputs
+- `setup.ts` - Jest test environment setup
+
+### Documentation (`docs/`)
+
+- `SOLUTION.md` - Technical solution overview
+- `optimization_plan.md` - Performance optimization strategies
+- `yml_support.md` - Yandex Market YML implementation details
+- `testing_strategy.md` - Test structure and coverage information
+- `security.md` - Security features and best practices
+
+### Distribution Outputs
+
+- `dist/` - TypeScript compilation output (main distribution)
+- `bundle/` - Webpack bundled single file for n8n
+- `standalone/` - Self-contained version with all dependencies
+
+### Configuration Files
+
+- `package.json` - Dependencies, scripts, n8n node registration
+- `tsconfig.json` - TypeScript compiler configuration
+- `webpack.config.js` - Bundle configuration for n8n distribution
+- `jest.config.js` - Test runner configuration
+- `eslint.config.mjs` - Modern ESLint flat configuration
+
+## Naming Conventions
+
+- **Files**: kebab-case for config files, PascalCase for main classes
+- **Classes**: PascalCase (e.g., `FileToJsonNode`)
+- **Functions**: camelCase (e.g., `extractViaOfficeParser`)
+- **Constants**: UPPER_SNAKE_CASE (e.g., `CSV_STREAM_ROW_LIMIT`)
+- **Interfaces**: PascalCase with descriptive names (e.g., `JsonTextResult`)
+
+## Code Organization Patterns
+
+- **Strategy Pattern**: Format-specific processors in `strategies` object
+- **Error Hierarchy**: Custom error classes extending base `Error`
+- **Async/Await**: Consistent promise handling throughout
+- **Type Safety**: Strict TypeScript with comprehensive interfaces
+- **Validation**: Input sanitization and type checking at boundaries
 
 ## 📦 Installing Dependencies
 
@@ -217,6 +353,9 @@ npm install
 # Install dependencies
 npm install
 
+# Development with automatic rebuild
+npm run dev
+
 # Build project
 npm run build
 
@@ -231,9 +370,6 @@ npm run lint
 
 # Fix linting
 npm run lint:fix
-
-# Development with automatic rebuild
-npm run dev
 ```
 
 ## 💡 Recommendations
@@ -291,7 +427,7 @@ Or via n8n web interface:
 1. **Copy files to custom nodes folder:**
    ```bash
    mkdir -p ~/.n8n/custom-nodes/n8n-node-converter-documents
-   cp dist/* ~/.n8n/custom-nodes/n8n-node-converter-documents/
+   cp dist/*.js dist/*.svg ~/.n8n/custom-nodes/n8n-node-converter-documents/
    cp package.json ~/.n8n/custom-nodes/n8n-node-converter-documents/
    ```
 
@@ -303,18 +439,13 @@ Or via n8n web interface:
 
 3. **Restart n8n**
 
-### Option 4: Global dependency installation
+### ⚠️ Note: TypeScript Types and Source Maps
 
-If you have administrator rights, you can install dependencies globally:
+The `dist/` folder contains additional files:
+- `*.d.ts` — TypeScript type definitions (optional for runtime)
+- `*.js.map` — Source maps for debugging (optional for production)
 
-```bash
-npm install -g chardet cheerio exceljs file-type iconv-lite mammoth officeparser papaparse pdf-parse sanitize-html xml2js
-```
-
-Then copy only the main node file:
-```bash
-cp dist/FileToJsonNode.node.js ~/.n8n/custom-nodes/
-```
+These files are automatically included when installing via npm but can be omitted for manual installation to save space.
 
 ## 🔧 Troubleshooting
 
@@ -347,6 +478,12 @@ npm list
 
 ## 📈 Latest Updates
 
+### v1.0.11 (Current)
+- **📚 Documentation**: Updated documentation to reflect current architecture
+- **🏗️ Architecture**: Documented strategy pattern implementation
+- **🧪 Testing**: Comprehensive test structure documentation
+- **📊 Dependencies**: Updated dependency analysis and optimization plans
+
 ### v1.0.10 (2025-06-20)
 - **🐛 Critical Fix**: Restored support for ODT, ODP, ODS and JSON formats
 - Fixed "Unsupported file type" error for these formats
@@ -356,6 +493,14 @@ npm list
 - **🔧 CI/CD**: Fixed Jest compatibility issues
 - Updated Jest command parameters for Jest 30+ compatibility
 - All CI tests now pass successfully
+
+## 📚 Additional Documentation
+
+- [Technical Solution Overview](docs/SOLUTION.md) - Architecture and implementation details
+- [Performance Optimization Strategies](docs/optimization_plan.md) - Dependency analysis and optimization plans
+- [Yandex Market YML Implementation](docs/yml_support.md) - YML catalog processing details
+- [Testing Strategy](docs/testing_strategy.md) - Test structure and coverage information
+- [Security Considerations](docs/security.md) - Security features and best practices
 
 ---
 

@@ -383,14 +383,18 @@ const strategies: Record<string, (buf: Buffer, ext?: string) => Promise<Partial<
   docx: async (buf) => {
     // Используем officeparser вместо mammoth для единообразия
     try {
-      return { text: await extractViaOfficeParser(buf) };
+      const text = await extractViaOfficeParser(buf);
+      return { text: text || '' };
     } catch (error) {
       // Fallback на mammoth если officeparser не справился
       try {
         const result = await mammoth.extractRawText({ buffer: buf });
-        return { text: result.value };
-      } catch {
-        throw new ProcessingError(`DOCX processing error: ${error instanceof Error ? error.message : String(error)}`);
+        return { text: result.value || '' };
+      } catch (fallbackError) {
+        throw new ProcessingError(
+          `DOCX processing error: Primary parser failed (${error instanceof Error ? error.message : String(error)}), ` +
+          `Fallback parser failed (${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)})`
+        );
       }
     }
   },
@@ -773,8 +777,16 @@ class FileToJsonNode {
       if (
         "text" in json &&
         (!(json as JsonTextResult).text || (json as JsonTextResult).text.trim().length === 0)
-      )
-        throw new EmptyFileError("File is empty or contains no text");
+      ) {
+        throw new EmptyFileError(
+          `File "${name}" (${ext.toUpperCase()}, ${(buf.length / 1024).toFixed(2)} KB) contains no extractable text. ` +
+          `Possible reasons: (1) File contains only images/graphics without text, ` +
+          `(2) File is password-protected or encrypted, ` +
+          `(3) File structure is corrupted, ` +
+          `(4) File was created with a non-standard application. ` +
+          `Try: Open file in original application and verify it contains text, then save it again.`
+        );
+      }
 
       json.metadata = {
         fileName: sanitizeFileName(name) || null,

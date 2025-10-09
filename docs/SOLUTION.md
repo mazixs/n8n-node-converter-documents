@@ -1,117 +1,161 @@
-# Решение проблемы зависимостей в n8n custom nodes
+# Technical Solution Overview
 
-## Проблема
-При использовании кастомных нод в n8n возникает ошибка:
+## Architecture Overview
+
+This n8n community node implements a hybrid document processing architecture using the strategy pattern with format-specific processors and intelligent fallbacks.
+
+### Core Architecture Components
+
+1. **Main Node Implementation** (`FileToJsonNode.node.ts`)
+   - Strategy pattern for format-specific processing
+   - Custom error hierarchy for different failure modes
+   - Promise pooling for concurrent processing
+   - Input validation and sanitization
+
+2. **Helper Functions** (`helpers.ts`)
+   - Document extraction utilities
+   - Excel sheet limiting for performance
+   - Backward compatibility functions
+
+3. **Error Classes** (`errors.ts`)
+   - Custom error types extending base Error
+   - Specific error handling for different scenarios
+
+## Dependency Management Solutions
+
+### Processing Strategy Implementation
+
+The node uses a hybrid approach with primary and fallback processors:
+
+```typescript
+const strategies: Record<string, (buf: Buffer, ext?: string) => Promise<Partial<JsonResult>>> = {
+  docx: async (buf) => {
+    try {
+      return { text: await extractViaOfficeParser(buf) };
+    } catch (error) {
+      // Fallback to mammoth if officeparser fails
+      const result = await mammoth.extractRawText({ buffer: buf });
+      return { text: result.value };
+    }
+  },
+  // ... other strategies
+};
 ```
-Error: Cannot find module 'exceljs'
-```
 
-Это происходит потому, что когда нода копируется в папку `/.n8n/custom-nodes/`, зависимости не устанавливаются автоматически.
+### Error Handling Architecture
 
-## Решения
+Custom error classes provide specific handling for different failure scenarios:
 
-### 1. Standalone версия (рекомендуется)
+- `FileTypeError` - Invalid file types or missing binary data
+- `FileTooLargeError` - Files exceeding size limits
+- `UnsupportedFormatError` - Legacy formats (DOC, PPT) or unknown types
+- `EmptyFileError` - Empty files or no extractable content
+- `ProcessingError` - General processing failures
 
-Создайте standalone версию с собственным package.json:
+## Installation Solutions
+
+### 1. Standalone Version (Recommended)
+
+Create a standalone version with its own package.json:
 
 ```bash
-# Клонируйте репозиторий
+# Clone the repository
 git clone https://github.com/mazix/n8n-node-converter-documents.git
 cd n8n-node-converter-documents
 
-# Установите зависимости и создайте standalone версию
+# Install dependencies and create standalone version
 npm install
 npm run standalone
 
-# Скопируйте в n8n
+# Copy to n8n
 cp -r ./standalone ~/.n8n/custom-nodes/n8n-node-converter-documents
 cd ~/.n8n/custom-nodes/n8n-node-converter-documents
 npm install
 
-# Перезапустите n8n
+# Restart n8n
 ```
 
-### 2. Использование npm пакета
+### 2. Using npm Package
 
 ```bash
-# В папке с n8n проектом
+# In n8n project folder
 npm install @mazix/n8n-nodes-converter-documents
 ```
 
-### 3. Ручная установка зависимостей
+### 3. Manual Dependency Installation
 
 ```bash
-# Скопируйте файлы
+# Copy files
 mkdir -p ~/.n8n/custom-nodes/n8n-node-converter-documents
 cp dist/* ~/.n8n/custom-nodes/n8n-node-converter-documents/
 cp package.json ~/.n8n/custom-nodes/n8n-node-converter-documents/
 
-# Установите зависимости
+# Install dependencies
 cd ~/.n8n/custom-nodes/n8n-node-converter-documents
 npm install --production
 ```
 
-### 4. Глобальная установка
+### 4. Global Installation
 
 ```bash
-# Установите зависимости глобально
+# Install dependencies globally
 npm install -g chardet cheerio exceljs file-type iconv-lite mammoth officeparser papaparse pdf-parse sanitize-html xml2js
 
-# Скопируйте только основной файл
+# Copy only the main file
 cp dist/FileToJsonNode.node.js ~/.n8n/custom-nodes/
 ```
 
-## Что делает standalone версия
+## What the Standalone Version Does
 
-Скрипт `create-standalone.js`:
-1. Создает папку `./standalone/`
-2. Копирует скомпилированные файлы из `dist/`
-3. Создает минимальный `package.json` только с runtime зависимостями
-4. Добавляет README с инструкциями
+The `create-standalone.js` script:
+1. Creates `./standalone/` folder
+2. Copies compiled files from `dist/`
+3. Creates minimal `package.json` with runtime dependencies only
+4. Adds README with installation instructions
 
-## Структура standalone версии
+## Standalone Version Structure
 
 ```
 standalone/
-├── FileToJsonNode.node.js  # Основной файл ноды
-├── helpers.js              # Вспомогательные функции
-├── errors.js               # Кастомные ошибки
-├── package.json            # Только runtime зависимости
-└── README.md               # Инструкции по установке
+├── FileToJsonNode.node.js  # Main node file
+├── helpers.js              # Helper functions
+├── errors.js               # Custom errors
+├── package.json            # Runtime dependencies only
+└── README.md               # Installation instructions
 ```
 
-## Проверка установки
+## Installation Verification
 
 ```bash
-# Проверьте файлы
+# Check files
 ls -la ~/.n8n/custom-nodes/n8n-node-converter-documents/
 
-# Проверьте зависимости
+# Check dependencies
 cd ~/.n8n/custom-nodes/n8n-node-converter-documents/
 npm list
 ```
 
-## Опубликованный пакет
+## Published Package
 
-Пакет доступен на npmjs.org:
-- **Название**: `@mazix/n8n-nodes-converter-documents`
-- **Версия**: 1.0.3
-- **Размер**: 11.0 kB (9 файлов)
+Package available on npmjs.org:
+- **Name**: `@mazix/n8n-nodes-converter-documents`
+- **Version**: 1.0.11
+- **Size**: 11.0 kB (9 files)
 
-## Полезные команды
+## Useful Commands
 
 ```bash
-# Создать standalone версию
+# Create standalone version
 npm run standalone
 
-# Собрать проект
+# Build project
 npm run build
 
-# Запустить тесты
+# Run tests
 npm test
 
-# Проверить пакет
+# Check package
 npm pack --dry-run
 ```
 
-Standalone версия - это самый надежный способ решения проблемы с зависимостями в n8n custom nodes. 
+The standalone version is the most reliable way to solve dependency issues in n8n custom nodes. 

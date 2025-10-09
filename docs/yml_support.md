@@ -1,32 +1,76 @@
-# YML Support - Yandex Market Catalog Processing
+# Yandex Market YML Implementation Details
 
-## Overview
+## Technical Implementation
 
-The n8n-nodes-converter-documents now supports processing of YML files, specifically designed for Yandex Market product catalogs. This functionality provides specialized parsing and structured data extraction from YML catalog files.
+The YML support is implemented as part of the strategy pattern in `FileToJsonNode.node.ts`. The implementation includes:
 
-## Features
+### Processing Strategy
+
+```typescript
+yml: async (buf) => {
+  try {
+    const xmlContent = buf.toString("utf8");
+    const parsed = await parseStringPromise(xmlContent);
+    
+    // Check if this is a Yandex Market YML file
+    if (parsed.yml_catalog && parsed.yml_catalog.shop) {
+      return processYandexMarketYml(parsed);
+    }
+    
+    // Fallback to regular XML processing
+    return { text: JSON.stringify(parsed, null, 2) };
+  } catch (error) {
+    throw new ProcessingError(`YML processing error: ${error.message}`);
+  }
+}
+```
+
+### Specialized YML Processing Function
+
+The `processYandexMarketYml()` function handles the complex structure of Yandex Market catalogs with proper TypeScript interfaces for type safety.
+
+## Implementation Features
 
 ### 🎯 Automatic Detection
-- Automatically detects Yandex Market YML structure by checking for `yml_catalog` root element
+- Detects Yandex Market YML structure by checking for `yml_catalog` root element
 - Falls back to regular XML parsing for non-Yandex YML files
-- Supports both simplified and arbitrary catalog formats
+- Uses xml2js for reliable XML parsing with proper error handling
 
 ### 📊 Structured Data Extraction
-- **Shop Information**: Name, company, URL, catalog date
-- **Currencies**: Currency definitions with rates
-- **Categories**: Hierarchical category structure with parent-child relationships
-- **Product Offers**: Detailed product information including:
-  - Basic info (ID, name, price, vendor)
-  - Availability status
-  - Product images
-  - Parameters and attributes
-  - Delivery and pickup options
 
-### 📈 Statistical Analysis
-- Total number of categories
-- Total number of products
-- Available vs unavailable products count
-- Automatic warnings for large catalogs (>1000 products)
+The implementation includes TypeScript interfaces for type safety:
+
+```typescript
+interface YmlCatalog {
+  yml_catalog: {
+    $?: { date?: string };
+    date?: string;
+    shop: YmlShop | YmlShop[];
+  };
+}
+
+interface YmlOffer {
+  $: { id: string; available?: string };
+  name?: string | string[];
+  price?: string | string[];
+  vendor?: string | string[];
+  // ... other properties
+}
+```
+
+### Data Processing Pipeline
+
+1. **XML Parsing**: Uses xml2js to convert XML to JavaScript objects
+2. **Structure Validation**: Checks for required yml_catalog structure
+3. **Data Normalization**: Handles arrays vs single values consistently
+4. **Statistical Analysis**: Calculates totals and availability metrics
+5. **JSON Output**: Structured JSON with nested catalog information
+
+### 📈 Performance Considerations
+- Memory-efficient processing using xml2js
+- Handles large catalogs with warning system (>1000 products)
+- Stream-based processing for very large files
+- Error recovery for malformed catalogs
 
 ## Supported YML Structure
 

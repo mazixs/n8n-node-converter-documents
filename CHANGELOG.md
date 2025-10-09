@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.0.12] - 2025-10-09
+
+### 🐛 Bug Fixes & Improvements
+- **Error Diagnostics**: Dramatically improved error message for EmptyFileError
+  - Now shows file name, format, and size in error message
+  - Lists 4 possible reasons why file might appear empty
+  - Provides actionable recommendations for fixing the issue
+  - Example: `File "doc.docx" (DOCX, 916.02 KB) contains no extractable text. Possible reasons: (1) File contains only images...`
+  
+- **DOCX Parser**: Enhanced error reporting for DOCX processing
+  - Now reports failures from both primary (officeparser) and fallback (mammoth) parsers
+  - Explicit handling of empty text results from parsers
+  - Better debugging information for troubleshooting
+
+### 📚 Documentation
+- **TROUBLESHOOTING_EMPTY_FILE.md**: Complete guide for diagnosing empty file errors
+  - 5 common reasons for empty file errors with solutions
+  - Step-by-step diagnostic procedures
+  - Alternative tools and manual extraction methods
+  - Quick fix recipes for most common cases
+  
+- **FIX_EMPTY_FILE_ERROR.md**: Update instructions and changelog details
+  - Multiple installation/update methods documented
+  - Testing procedures for verification
+  - Known issues vs actual bugs clarification
+
+### 🎯 Impact
+- **User Experience**: Users now understand why processing failed and how to fix it
+- **Developer Experience**: Easier to diagnose parser issues with detailed error messages
+- **Support Reduction**: Self-service troubleshooting reduces support requests
+
+### 🔧 Technical Details
+- Modified `strategies.docx` to explicitly handle empty strings
+- Enhanced `EmptyFileError` throw location with contextual information
+- No breaking changes - purely diagnostic improvements
+
+---
+
 ## [1.0.11.1] - 2025-01-27
 
 ### 🔧 Bug Fixes
