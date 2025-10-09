@@ -28,6 +28,9 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: test
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
     
     steps:
     - name: Checkout Repository
@@ -183,24 +186,79 @@ jobs:
         echo "- **Upload URL:** ${{ steps.create_release.outputs.upload_url }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Assets:** ${{ steps.create_release.outputs.assets }}" >> $GITHUB_STEP_SUMMARY
 
+  # Публикация в npm
+  publish-npm:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: [test, release]
+    if: github.ref_type == 'tag'
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js for npm
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        registry-url: 'https://registry.npmjs.org'
+        cache: 'npm'
+        
+    - name: Install Dependencies
+      run: npm ci
+      
+    - name: Build Project
+      run: npm run build
+      
+    - name: Verify Build Artifacts
+      run: |
+        if [ ! -d "dist" ]; then
+          echo "❌ Build artifacts not found!"
+          exit 1
+        fi
+        
+        echo "✅ Build artifacts verified:"
+        ls -la dist/
+        
+    - name: Verify Package Contents
+      run: |
+        echo "📦 Package contents (dry-run):"
+        npm pack --dry-run 2>&1 | grep "npm notice"
+        
+    - name: Publish to npm
+      run: npm publish --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      
+    - name: Publish Summary
+      run: |
+        echo "## 📦 npm Publication Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Package:** @mazix/n8n-nodes-converter-documents" >> $GITHUB_STEP_SUMMARY
+        echo "- **Version:** ${{ needs.release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Registry:** https://www.npmjs.com/package/@mazix/n8n-nodes-converter-documents" >> $GITHUB_STEP_SUMMARY
+        echo "- **Published at:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Package successfully published to npm!" >> $GITHUB_STEP_SUMMARY
+
   # Уведомление о релизе
   notify:
     name: Post-Release Notification
     runs-on: ubuntu-latest
-    needs: [test, release]
+    needs: [test, release, publish-npm]
     if: always()
     
     steps:
     - name: Notify Success
-      if: needs.release.result == 'success'
+      if: needs.release.result == 'success' && needs.publish-npm.result == 'success'
       run: |
         echo "🎉 Release completed successfully!"
         echo "✅ Tests passed"
         echo "✅ Release created"
         echo "✅ Assets uploaded"
+        echo "✅ Published to npm"
         
     - name: Notify Failure
-      if: needs.release.result == 'failure' || needs.test.result == 'failure'
+      if: needs.release.result == 'failure' || needs.test.result == 'failure' || needs.publish-npm.result == 'failure'
       run: |
         echo "❌ Release failed!"
         if [ "${{ needs.test.result }}" = "failure" ]; then
@@ -208,5 +266,8 @@ jobs:
         fi
         if [ "${{ needs.release.result }}" = "failure" ]; then
           echo "❌ Release creation failed"
+        fi
+        if [ "${{ needs.publish-npm.result }}" = "failure" ]; then
+          echo "❌ npm publication failed"
         fi
         exit 1 
