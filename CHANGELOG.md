@@ -1,5 +1,46 @@
 # Changelog
 
+## [1.0.18] - 2025-10-10
+
+### 🔒 Security & CI/CD
+- **CRITICAL: Fixed CI/CD Pipeline Architecture**
+  - Release workflow now depends on successful CI completion
+  - Added `needs: ci` to release job - release cannot start if CI fails
+  - Release now calls CI workflow via `workflow_call` to ensure checks run
+  - Prevents publishing broken releases from commits that didn't pass CI
+  - Removed duplicate lint/build/test steps from release workflow
+
+### 🏗️ Architecture Changes
+**Before (❌ UNSAFE):**
+```
+Tag created → Release runs independently → Could publish broken code
+```
+
+**After (✅ SAFE):**
+```
+Tag created → CI runs (lint/build/test) → [PASS] → Release publishes
+                                        ↓
+                                     [FAIL] → Release blocked
+```
+
+### 📋 Files Changed
+- `.github/workflows/release.yml`: 
+  - Added CI job that calls ci.yml workflow
+  - Added `needs: ci` dependency to release job
+  - Removed duplicate lint/test steps (now handled by CI)
+  - Added `checks: write` permission
+
+### 🎯 Impact
+- **For Security**: Cannot accidentally publish broken code
+- **For CI/CD**: Follows proper gate-keeper pattern
+- **For Developers**: Release failures now clearly show CI step that failed
+- **Build Time**: No change - steps still run, but in correct order
+
+### ⚠️ Breaking Change Note
+This is a CI/CD architecture fix, not a code change. No breaking changes for users.
+
+---
+
 ## [1.0.17] - 2025-10-10
 
 ### 🔧 Code Quality
