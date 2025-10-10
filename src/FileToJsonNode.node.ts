@@ -75,6 +75,36 @@ function sanitizeFileName(fileName: string): string {
 }
 
 /**
+ * Проверка CFB формата (старые форматы DOC/PPT/XLS)
+ */
+function checkCFBFormat(buf: Buffer, formatName: string, modernFormat: string): void {
+  const signature = buf.slice(0, 8);
+  const cfbSignature = Buffer.from([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]);
+  
+  if (signature.equals(cfbSignature)) {
+    throw new UnsupportedFormatError(
+      `Старые ${formatName} файлы не поддерживаются. ` +
+      `Пожалуйста, сохраните файл в формате ${modernFormat} и попробуйте снова.`
+    );
+  }
+}
+
+/**
+ * Унифицированный обработчик для OfficeParser форматов (ODT/ODP/ODS)
+ */
+async function processViaOfficeParser(buf: Buffer, formatName: string): Promise<Partial<JsonResult>> {
+  try {
+    return { text: await extractViaOfficeParser(buf) };
+  } catch (error) {
+    // Пробрасываем специализированные ошибки как есть
+    if (error instanceof UnsupportedFormatError || error instanceof ProcessingError) {
+      throw error;
+    }
+    throw new ProcessingError(`${formatName} processing error: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
  * Promise pool для ограничения количества одновременных задач
  */
 async function promisePool<T, R>(
@@ -354,17 +384,7 @@ function processYandexMarketYml(parsed: YmlCatalog): Partial<JsonResult> {
 const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputFormat?: string }) => Promise<Partial<JsonResult>>> = {
   doc: async (buf) => {
     try {
-      // Проверяем, является ли это старым DOC файлом (CFB формат)
-      const signature = buf.slice(0, 8);
-      const cfbSignature = Buffer.from([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]);
-      
-      if (signature.equals(cfbSignature)) {
-        throw new UnsupportedFormatError(
-          "Старые DOC файлы (Word 97-2003) не поддерживаются. " +
-          "Пожалуйста, сохраните файл в формате DOCX (Word 2007+) и попробуйте снова."
-        );
-      }
-      
+      checkCFBFormat(buf, 'DOC (Word 97-2003)', 'DOCX (Word 2007+)');
       return { text: await extractViaOfficeParser(buf) };
     } catch (error) {
       if (error instanceof UnsupportedFormatError) {
@@ -530,39 +550,9 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
       throw new ProcessingError(`JSON parsing error: ${error instanceof Error ? error.message : String(error)}`);
     }
   },
-  odt: async (buf) => {
-    try {
-      return { text: await extractViaOfficeParser(buf) };
-    } catch (error) {
-      // Пробрасываем специализированные ошибки как есть
-      if (error instanceof UnsupportedFormatError || error instanceof ProcessingError) {
-        throw error;
-      }
-      throw new ProcessingError(`ODT processing error: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  },
-  odp: async (buf) => {
-    try {
-      return { text: await extractViaOfficeParser(buf) };
-    } catch (error) {
-      // Пробрасываем специализированные ошибки как есть
-      if (error instanceof UnsupportedFormatError || error instanceof ProcessingError) {
-        throw error;
-      }
-      throw new ProcessingError(`ODP processing error: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  },
-  ods: async (buf) => {
-    try {
-      return { text: await extractViaOfficeParser(buf) };
-    } catch (error) {
-      // Пробрасываем специализированные ошибки как есть
-      if (error instanceof UnsupportedFormatError || error instanceof ProcessingError) {
-        throw error;
-      }
-      throw new ProcessingError(`ODS processing error: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  },
+  odt: async (buf) => processViaOfficeParser(buf, 'ODT'),
+  odp: async (buf) => processViaOfficeParser(buf, 'ODP'),
+  ods: async (buf) => processViaOfficeParser(buf, 'ODS'),
 
   xlsx: async (buf) => {
     // Используем ExcelJS напрямую для полной поддержки структуры Excel
@@ -621,17 +611,7 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
   },
   ppt: async (buf) => {
     try {
-      // Проверяем, является ли это старым PPT файлом (CFB формат)
-      const signature = buf.slice(0, 8);
-      const cfbSignature = Buffer.from([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]);
-      
-      if (signature.equals(cfbSignature)) {
-        throw new UnsupportedFormatError(
-          "Старые PPT файлы (PowerPoint 97-2003) не поддерживаются. " +
-          "Пожалуйста, сохраните файл в формате PPTX (PowerPoint 2007+) и попробуйте снова."
-        );
-      }
-      
+      checkCFBFormat(buf, 'PPT (PowerPoint 97-2003)', 'PPTX (PowerPoint 2007+)');
       return { text: await extractViaOfficeParser(buf) };
     } catch (error) {
       if (error instanceof UnsupportedFormatError) {
@@ -649,9 +629,7 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
       throw new ProcessingError(`PPT processing error: ${error instanceof Error ? error.message : String(error)}`);
     }
   },
-  pptx: async (buf) => ({
-    text: await extractViaOfficeParser(buf),
-  }),
+  pptx: async (buf) => processViaOfficeParser(buf, 'PPTX'),
   html: async (buf) => processHtml(buf),
   htm: async (buf) => processHtml(buf),
 };

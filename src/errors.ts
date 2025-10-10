@@ -1,36 +1,61 @@
 // Кастомные классы ошибок для нода n8n
 
-export class FileTypeError extends Error {
-  constructor(message: string) {
+/**
+ * Базовый класс для всех кастомных ошибок конвертера
+ */
+class BaseConverterError extends Error {
+  constructor(message: string, name: string) {
     super(message);
-    this.name = 'FileTypeError';
+    this.name = name;
+    
+    // Сохраняем правильный stack trace в Node.js
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, this.constructor);
+    }
   }
 }
 
-export class FileTooLargeError extends Error {
+/**
+ * Ошибка неверного типа файла
+ */
+export class FileTypeError extends BaseConverterError {
   constructor(message: string) {
-    super(message);
-    this.name = 'FileTooLargeError';
+    super(message, 'FileTypeError');
   }
 }
 
-export class UnsupportedFormatError extends Error {
+/**
+ * Ошибка превышения размера файла
+ */
+export class FileTooLargeError extends BaseConverterError {
   constructor(message: string) {
-    super(message);
-    this.name = 'UnsupportedFormatError';
+    super(message, 'FileTooLargeError');
   }
 }
 
-export class EmptyFileError extends Error {
+/**
+ * Ошибка неподдерживаемого формата
+ */
+export class UnsupportedFormatError extends BaseConverterError {
   constructor(message: string) {
-    super(message);
-    this.name = 'EmptyFileError';
+    super(message, 'UnsupportedFormatError');
   }
 }
 
-export class ProcessingError extends Error {
+/**
+ * Ошибка пустого файла
+ */
+export class EmptyFileError extends BaseConverterError {
   constructor(message: string) {
-    super(message);
-    this.name = 'ProcessingError';
+    super(message, 'EmptyFileError');
+  }
+}
+
+/**
+ * Ошибка обработки файла
+ */
+export class ProcessingError extends BaseConverterError {
+  constructor(message: string) {
+    super(message, 'ProcessingError');
   }
 } 

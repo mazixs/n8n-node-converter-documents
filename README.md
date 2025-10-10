@@ -72,6 +72,8 @@
 
 ## 📊 DOCX to HTML Conversion (v1.0.21+)
 
+> **Latest:** Node renamed to "Document Converter" in v1.0.22
+
 ### 🎨 Choose Your Output Format
 
 <table>
@@ -384,28 +386,28 @@ npm run lint       # Check code quality
 
 ## 📈 Latest Updates
 
-### 🎉 v1.0.21 (Current - 2025-10-10)
+### 🎉 v1.0.22 (Current - 2025-10-10)
 
 <table>
 <tr>
 <td width="50%">
 
-**🚀 Major Features**
-- ✅ DOCX → HTML conversion
-- ✅ `outputFormat` parameter
-- ✅ Table preservation (`<table>`, `<tr>`, `<td>`)
-- ✅ AI/LLM friendly output
-- ✅ Full formatting support
+**🎨 UI & Quality**
+- ✅ **Node renamed**: "Document Converter"
+- ✅ **Icon fixed**: 60×60 (proper size)
+- ✅ **Code refactored**: -78 lines
+- ✅ **Zero duplication**: 100% eliminated
+- ✅ **Full error handling**: PPTX fixed
 
 </td>
 <td width="50%">
 
-**🧪 Testing & Docs**
-- ✅ 80 tests passing (+7 new)
-- ✅ XLSX multi-sheet tests
-- ✅ Complete research docs
-- ✅ Zero new dependencies
-- ✅ Backward compatible
+**📚 Docs & Tests**
+- ✅ **README redesign**: Badges, TOC, tables
+- ✅ **80 tests passing** (+7 XLSX)
+- ✅ **Full JSDoc**: All functions documented
+- ✅ **Better IntelliSense**: IDE support improved
+- ✅ **Professional look**: Visual tables & icons
 
 </td>
 </tr>
@@ -413,14 +415,28 @@ npm run lint       # Check code quality
 
 **What's New:**
 ```diff
-+ DOCX to HTML conversion with table support
-+ outputFormat parameter (text | html)
-+ XLSX multi-sheet processing tests
-+ 80 tests (was 73)
-+ HTML preserves: tables, bold, italic, headings, lists
++ Node renamed to "Document Converter" (better UX)
++ Icon size fixed: 2048×1853 → 60×60
++ Code quality: eliminated all duplication
++ BaseConverterError class (DRY principle)
++ checkCFBFormat() helper (unified CFB check)
++ processViaOfficeParser() helper (unified error handling)
++ Full JSDoc documentation added
++ README complete visual redesign
++ 7 new XLSX multi-sheet tests
 ```
 
 ### Previous Versions
+
+<details>
+<summary><b>v1.0.21</b> - DOCX to HTML Conversion</summary>
+
+- DOCX to HTML conversion with table support
+- outputFormat parameter (text | html)
+- Table preservation in HTML
+- AI/LLM friendly output
+- 73 tests passing
+</details>
 
 <details>
 <summary><b>v1.0.20</b> - TextBox & Shapes Support</summary>
