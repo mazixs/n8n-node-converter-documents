@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.0.16] - 2025-10-10
+
+### 🚀 Features
+- **DOCX Parser Enhancement**: Added third-level fallback parser for non-standard DOCX files
+  - Now supports DOCX files created in ONLYOFFICE and other non-Microsoft applications
+  - Implements direct XML parsing from DOCX ZIP structure when standard parsers fail
+  - Three-tier parsing strategy: officeparser → mammoth → direct XML extraction
+  - Extracts text from `<w:t>` tags in word/document.xml
+
+### 🐛 Bug Fixes
+- **ONLYOFFICE Compatibility**: Fixed "no extractable text" error for ONLYOFFICE-created DOCX files
+  - Previously both officeparser and mammoth returned empty strings
+  - Now successfully extracts text using direct ZIP/XML parsing
+  - Maintains backward compatibility with standard Microsoft DOCX files
+
+### 📦 Dependencies
+- **Added**: `jszip@^3.10.1` - ZIP archive manipulation for DOCX parsing
+- **Added**: `@types/jszip@^3.4.1` (dev) - TypeScript definitions
+
+### 🔧 Technical Details
+- Enhanced DOCX strategy with recursive XML text extraction
+- Parser tries methods sequentially, returns first successful result
+- Only throws error if all three methods fail
+- Improved error message for truly corrupted/encrypted files
+
+### 📋 Files Changed
+- `src/FileToJsonNode.node.ts`: Enhanced DOCX processing with JSZip fallback
+- `package.json`: Added jszip dependency
+
+### 🎯 Impact
+- **For Users**: ONLYOFFICE and other alternative office suite files now work correctly
+- **For Developers**: More robust DOCX handling with graceful fallbacks
+- **Performance**: No impact - fallback only used when standard parsers fail
+
+---
+
 ## [1.0.15] - 2025-10-10
 
 ### 🐛 Bug Fixes

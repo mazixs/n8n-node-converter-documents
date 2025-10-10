@@ -1,6 +1,6 @@
 {
   "name": "@mazix/n8n-nodes-converter-documents",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "description": "n8n node to convert various document formats (DOCX, XML, YML, XLS, XLSX, CSV, PDF, TXT, PPT, PPTX, HTML, JSON, ODT, ODP, ODS) to JSON or text format",
   "main": "dist/FileToJsonNode.node.js",
   "scripts": {
@@ -55,6 +55,7 @@
     "exceljs": "^4.4.0",
     "file-type": "^21.0.0",
     "iconv-lite": "^0.6.3",
+    "jszip": "^3.10.1",
     "mammoth": "^1.9.1",
     "officeparser": "^5.1.1",
     "papaparse": "^5.5.3",
@@ -69,6 +70,7 @@
     "@types/chardet": "^0.8.3",
     "@types/iconv-lite": "^0.0.1",
     "@types/jest": "^30.0.0",
+    "@types/jszip": "^3.4.0",
     "@types/node": "^22.15.29",
     "@types/papaparse": "^5.3.16",
     "@types/pdf-parse": "^1.1.5",

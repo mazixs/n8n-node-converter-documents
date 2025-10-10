@@ -28,6 +28,7 @@ import Papa from "papaparse";
 import * as readline from "readline";
 import { Readable } from "stream";
 import sanitizeHtml from "sanitize-html";
+import JSZip from "jszip";
 
 // Официальные типы n8n
 import { 
@@ -382,22 +383,80 @@ const strategies: Record<string, (buf: Buffer, ext?: string) => Promise<Partial<
     }
   },
   docx: async (buf) => {
-    // Используем officeparser вместо mammoth для единообразия
+    // Попытка 1: officeparser
     try {
       const text = await extractViaOfficeParser(buf);
-      return { text: text || '' };
-    } catch (error) {
-      // Fallback на mammoth если officeparser не справился
-      try {
-        const result = await mammoth.extractRawText({ buffer: buf });
-        return { text: result.value || '' };
-      } catch (fallbackError) {
-        throw new ProcessingError(
-          `DOCX processing error: Primary parser failed (${error instanceof Error ? error.message : String(error)}), ` +
-          `Fallback parser failed (${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)})`
-        );
+      if (text && text.trim().length > 0) {
+        return { text };
       }
+      // Если вернул пустую строку - пробуем дальше
+    } catch (error) {
+      // Ошибка officeparser - пробуем дальше
     }
+    
+    // Попытка 2: mammoth
+    try {
+      const result = await mammoth.extractRawText({ buffer: buf });
+      if (result.value && result.value.trim().length > 0) {
+        return { text: result.value };
+      }
+      // Если вернул пустую строку - пробуем дальше
+    } catch (error) {
+      // Ошибка mammoth - пробуем дальше
+    }
+    
+    // Попытка 3: Прямой парсинг XML из ZIP (для ONLYOFFICE и других нестандартных DOCX)
+    try {
+      const zip = await JSZip.loadAsync(buf);
+      const documentXml = await zip.file('word/document.xml')?.async('text');
+      
+      if (documentXml) {
+        // Парсим XML и извлекаем текст из <w:t> тегов
+        const parsed = await parseStringPromise(documentXml);
+        const textParts: string[] = [];
+        
+        // Рекурсивная функция для поиска всех текстовых узлов
+        const extractText = (obj: any): void => {
+          if (!obj) return;
+          
+          if (typeof obj === 'string') {
+            textParts.push(obj);
+            return;
+          }
+          
+          if (Array.isArray(obj)) {
+            obj.forEach(item => extractText(item));
+            return;
+          }
+          
+          if (typeof obj === 'object') {
+            // Ищем теги <w:t> (текстовые узлы Word)
+            if (obj['w:t']) {
+              extractText(obj['w:t']);
+            }
+            // Рекурсивно обходим остальные свойства
+            Object.values(obj).forEach(value => extractText(value));
+          }
+        };
+        
+        extractText(parsed);
+        const extractedText = textParts.join(' ').trim();
+        
+        if (extractedText.length > 0) {
+          return { text: extractedText };
+        }
+      }
+    } catch (zipError) {
+      // Даже прямой парсинг не помог
+      throw new ProcessingError(
+        `DOCX processing error: All parsers failed. ` +
+        `This may be a corrupted, password-protected, or non-standard DOCX file. ` +
+        `Try opening and re-saving in Microsoft Word or LibreOffice.`
+      );
+    }
+    
+    // Если все три попытки вернули пустой текст
+    return { text: '' };
   },
   xml: async (buf) => {
     const parsed = await parseStringPromise(buf.toString("utf8"));
