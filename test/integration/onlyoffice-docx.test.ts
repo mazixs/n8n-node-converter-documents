@@ -69,4 +69,64 @@ describe('ONLYOFFICE DOCX Integration Test', () => {
       expect(extractedText).not.toContain('http://schemas.openxmlformats.org');
     }
   });
+
+  it('should extract text from TextBox and shapes (DrawingML a:t tags)', async () => {
+    const filePath = path.join(__dirname, '../samples/text-in-textbox.docx');
+    const buffer = fs.readFileSync(filePath);
+    
+    const zip = await JSZip.loadAsync(buffer);
+    const documentXml = await zip.file('word/document.xml')?.async('text');
+    
+    expect(documentXml).toBeDefined();
+    
+    if (documentXml) {
+      const parsed = await parseStringPromise(documentXml);
+      const textParts: string[] = [];
+      
+      // Новая логика с поддержкой a:t тегов
+      const extractText = (obj: unknown, isInsideTextNode = false): void => {
+        if (!obj) return;
+        
+        if (isInsideTextNode && typeof obj === 'string') {
+          textParts.push(obj);
+          return;
+        }
+        
+        if (Array.isArray(obj)) {
+          obj.forEach(item => extractText(item, isInsideTextNode));
+          return;
+        }
+        
+        if (typeof obj === 'object') {
+          const objRecord = obj as Record<string, unknown>;
+          
+          // Поддержка w:t И a:t тегов
+          if (objRecord['w:t'] || objRecord['a:t']) {
+            const textNode = objRecord['w:t'] || objRecord['a:t'];
+            extractText(textNode, true);
+            return;
+          }
+          
+          for (const key of Object.keys(objRecord)) {
+            if ((key.startsWith('w:') || key.startsWith('a:') || key.startsWith('wp:') || key.startsWith('pic:') || key.startsWith('wps:')) 
+                && key !== 'w:rsidR' && key !== 'w:rsidRPr' && !key.startsWith('$')) {
+              extractText(objRecord[key], false);
+            }
+          }
+        }
+      };
+      
+      extractText(parsed);
+      const extractedText = textParts.join(' ').trim();
+      
+      console.log('\n=== TEXTBOX TEST ===');
+      console.log('Extracted:', extractedText);
+      console.log('====================\n');
+      
+      // Должен содержать текст как из TextBox, так и обычный
+      expect(extractedText).toContain('Текст внутри TextBox');
+      expect(extractedText).toContain('Обычный текст');
+      expect(extractedText.length).toBeGreaterThan(0);
+    }
+  });
 });

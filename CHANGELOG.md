@@ -1,5 +1,44 @@
 # Changelog
 
+## [1.0.20] - 2025-10-10
+
+### 🚀 New Features
+- **TextBox & Shapes Support**: Added extraction of text from TextBoxes and shapes
+  - Now extracts text from `<a:t>` tags (DrawingML text elements)
+  - Supports `wps:` namespace (Word Processing Shapes - TextBox, shapes)
+  - Handles complex documents with mixed content (text + images + shapes)
+
+### 🐛 Bug Fix
+- **ONLYOFFICE Documents**: Fixed text extraction from documents with embedded shapes
+  - Previously: Text in TextBoxes was ignored
+  - Now: Extracts ALL text including TextBoxes, shapes, and regular paragraphs
+  - User hypothesis confirmed: Images + text documents now work correctly
+
+### 🧪 Testing
+- **Added**: Test for TextBox extraction (`text-in-textbox.docx`)
+- **Added**: Test for mixed content documents (`text-with-image.docx`)
+- **Result**: All 62 tests passing (was 61)
+- **Coverage**: Regular text, TextBox text, DrawingML text
+
+### 📊 Supported Text Sources
+1. `<w:t>` - Regular paragraph text
+2. `<a:t>` - DrawingML text (shapes, diagrams)
+3. `<wps:txbx>` → `<w:t>` - TextBox content
+4. Mixed documents with images + text
+
+### 📋 Files Changed
+- `src/FileToJsonNode.node.ts`: Added `wps:` prefix support, `a:t` tag extraction
+- `test/integration/onlyoffice-docx.test.ts`: Added TextBox test
+- `test/samples/text-in-textbox.docx`: New test file
+- `test/samples/text-with-image.docx`: New test file
+
+### 🎯 Impact
+- **For Users**: Documents with TextBoxes and shapes now extract ALL text content
+- **For ONLYOFFICE Users**: Complex documents with mixed content now work correctly
+- **Performance**: No impact - same recursive traversal, just more namespaces
+
+---
+
 ## [1.0.19] - 2025-10-10
 
 ### 🐛 Critical Bug Fix

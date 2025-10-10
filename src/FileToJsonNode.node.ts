@@ -415,11 +415,11 @@ const strategies: Record<string, (buf: Buffer, ext?: string) => Promise<Partial<
         const parsed = await parseStringPromise(documentXml);
         const textParts: string[] = [];
         
-        // Рекурсивная функция для поиска только w:t тегов (текстовые узлы Word)
+        // Рекурсивная функция для поиска текстовых узлов (w:t и a:t для DrawingML)
         const extractText = (obj: unknown, isInsideTextNode = false): void => {
           if (!obj) return;
           
-          // Если мы внутри w:t тега, извлекаем только строки
+          // Если мы внутри текстового тега, извлекаем только строки
           if (isInsideTextNode && typeof obj === 'string') {
             textParts.push(obj);
             return;
@@ -433,16 +433,19 @@ const strategies: Record<string, (buf: Buffer, ext?: string) => Promise<Partial<
           if (typeof obj === 'object') {
             const objRecord = obj as Record<string, unknown>;
             
-            // Если нашли w:t тег - извлекаем его содержимое
-            if (objRecord['w:t']) {
-              extractText(objRecord['w:t'], true); // Флаг: мы внутри текстового узла
+            // Если нашли w:t (обычный текст) или a:t (DrawingML текст - фигуры, textbox)
+            if (objRecord['w:t'] || objRecord['a:t']) {
+              const textNode = objRecord['w:t'] || objRecord['a:t'];
+              extractText(textNode, true); // Флаг: мы внутри текстового узла
               return; // НЕ обходим остальные свойства этого объекта
             }
             
-            // Продолжаем поиск w:t в дочерних элементах (только структурные теги)
+            // Продолжаем поиск текстовых тегов в дочерних элементах
             for (const key of Object.keys(objRecord)) {
-              // Обходим только Word структурные элементы, игнорируем атрибуты
-              if (key.startsWith('w:') && key !== 'w:rsidR' && key !== 'w:rsidRPr' && !key.startsWith('$')) {
+              // Обходим Word элементы (w:*) и DrawingML элементы (a:*, wp:*, pic:*, wps:*)
+              // Игнорируем атрибуты (начинаются с $) и metadata (rsid*)
+              if ((key.startsWith('w:') || key.startsWith('a:') || key.startsWith('wp:') || key.startsWith('pic:') || key.startsWith('wps:')) 
+                  && key !== 'w:rsidR' && key !== 'w:rsidRPr' && !key.startsWith('$')) {
                 extractText(objRecord[key], false);
               }
             }
