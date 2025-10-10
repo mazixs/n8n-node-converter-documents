@@ -1,5 +1,56 @@
 # Changelog
 
+## [1.0.14] - 2025-10-10
+
+### 🐛 Critical Bug Fixes
+- **Error Handling**: Fixed major error propagation issues
+  - Removed double-wrapping of errors that caused message duplication
+  - Specialized error types (`UnsupportedFormatError`, `EmptyFileError`, etc.) now properly preserved
+  - Enhanced error context in PDF fallback parser to show both primary and fallback failures
+  - Added consistent error type checking in ODT/ODP/ODS strategies
+  - Example fix: Previously showed `"ProcessingError: DOCX processing error: DOCX processing error..."`, now shows proper specialized errors
+
+- **Excel Processing**: Eliminated anti-pattern in XLSX strategy
+  - Removed exception-based control flow (throwing error to trigger fallback)
+  - Direct ExcelJS usage for better performance and cleaner code
+  - No functional changes, purely architectural improvement
+
+- **TypeScript Compatibility**: Fixed import errors
+  - Corrected `NodeConnectionType` → `NodeConnectionTypes` import from n8n-workflow
+  - Resolved TypeScript linter errors about types used as values
+
+### 🔒 Security
+- **Dependencies**: Fixed critical vulnerability in `form-data`
+  - Added `overrides` section to force `form-data@>=4.0.4` 
+  - Resolves GHSA-fjxv-7rqg-78g4 (unsafe random boundary generation)
+  - Zero breaking changes - uses npm overrides feature
+
+### 📚 Documentation
+- **Error Handling Analysis**: Added comprehensive documentation
+  - Created `docs/error-handling-issues.md` with detailed problem analysis
+  - Documented all 5 identified issues with before/after code examples
+  - Included testing results and impact assessment
+
+### ✅ Testing & Quality
+- All 60 tests passing
+- ESLint clean (0 errors, 1 pre-existing warning)
+- TypeScript compilation successful
+- Zero security vulnerabilities after fixes
+
+### 🎯 Impact
+- **For Users**: Clear, non-duplicated error messages with proper error types
+- **For Developers**: Cleaner codebase, better error handling patterns, improved type safety
+- **Performance**: Eliminated unnecessary try-catch overhead in Excel processing
+
+### 🔧 Technical Details
+- Modified error catching logic in main execute method (lines 772-783)
+- Refactored XLSX strategy to remove control-flow exceptions (lines 478-499)
+- Enhanced PDF fallback to capture both error contexts (lines 508-524)
+- Added error type preservation in ODT/ODP/ODS handlers (lines 444-476)
+- Fixed n8n-workflow import to use value-level exports
+
+---
+
 ## [1.0.12] - 2025-10-09
 
 ### 🐛 Bug Fixes & Improvements

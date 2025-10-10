@@ -35,7 +35,7 @@ import {
   INodeExecutionData,
   INodeType,
   INodeTypeDescription,
-  NodeConnectionType,
+  NodeConnectionTypes,
 } from 'n8n-workflow';
 
 interface JsonTextResult {
@@ -445,6 +445,10 @@ const strategies: Record<string, (buf: Buffer, ext?: string) => Promise<Partial<
     try {
       return { text: await extractViaOfficeParser(buf) };
     } catch (error) {
+      // Пробрасываем специализированные ошибки как есть
+      if (error instanceof UnsupportedFormatError || error instanceof ProcessingError) {
+        throw error;
+      }
       throw new ProcessingError(`ODT processing error: ${error instanceof Error ? error.message : String(error)}`);
     }
   },
@@ -452,6 +456,10 @@ const strategies: Record<string, (buf: Buffer, ext?: string) => Promise<Partial<
     try {
       return { text: await extractViaOfficeParser(buf) };
     } catch (error) {
+      // Пробрасываем специализированные ошибки как есть
+      if (error instanceof UnsupportedFormatError || error instanceof ProcessingError) {
+        throw error;
+      }
       throw new ProcessingError(`ODP processing error: ${error instanceof Error ? error.message : String(error)}`);
     }
   },
@@ -459,39 +467,35 @@ const strategies: Record<string, (buf: Buffer, ext?: string) => Promise<Partial<
     try {
       return { text: await extractViaOfficeParser(buf) };
     } catch (error) {
+      // Пробрасываем специализированные ошибки как есть
+      if (error instanceof UnsupportedFormatError || error instanceof ProcessingError) {
+        throw error;
+      }
       throw new ProcessingError(`ODS processing error: ${error instanceof Error ? error.message : String(error)}`);
     }
   },
 
   xlsx: async (buf) => {
-    // Пробуем сначала officeparser, затем ExcelJS как fallback
-    try {
-      const _text = await extractViaOfficeParser(buf);
-      // officeparser возвращает текст, но для Excel нам нужна структура
-      // Поэтому используем ExcelJS для полной функциональности
-      throw new Error("Use ExcelJS for structured data");
-    } catch {
-      // Используем ExcelJS для полной поддержки структуры Excel
-      const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(buf);
-      const sheets: Record<string, unknown[]> = {};
-      workbook.eachSheet((worksheet, _sheetId) => {
-        const sheetName = worksheet.name;
-        const jsonData: unknown[] = [];
-        worksheet.eachRow((row, _rowNumber) => {
-          const rowData: Record<string, unknown> = {};
-          row.eachCell((cell, colNumber) => {
-            const columnLetter = numberToColumn(colNumber - 1);
-            rowData[columnLetter] = cell.value;
-          });
-          if (Object.keys(rowData).length > 0) {
-            jsonData.push(rowData);
-          }
+    // Используем ExcelJS напрямую для полной поддержки структуры Excel
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buf as any);
+    const sheets: Record<string, unknown[]> = {};
+    workbook.eachSheet((worksheet, _sheetId) => {
+      const sheetName = worksheet.name;
+      const jsonData: unknown[] = [];
+      worksheet.eachRow((row, _rowNumber) => {
+        const rowData: Record<string, unknown> = {};
+        row.eachCell((cell, colNumber) => {
+          const columnLetter = numberToColumn(colNumber - 1);
+          rowData[columnLetter] = cell.value;
         });
-        sheets[sheetName] = limitExcelSheet(jsonData);
+        if (Object.keys(rowData).length > 0) {
+          jsonData.push(rowData);
+        }
       });
-      return { sheets };
-    }
+      sheets[sheetName] = limitExcelSheet(jsonData);
+    });
+    return { sheets };
   },
   csv: async (buf) => {
     const encoding = chardet.detect(buf) || "utf-8";
@@ -510,8 +514,11 @@ const strategies: Record<string, (buf: Buffer, ext?: string) => Promise<Partial<
       try {
         const data = await pdfParse(buf);
         return { text: data.text };
-      } catch {
-        throw new ProcessingError(`PDF processing error: ${error instanceof Error ? error.message : String(error)}`);
+      } catch (fallbackError) {
+        throw new ProcessingError(
+          `PDF processing error: Primary parser failed (${error instanceof Error ? error.message : String(error)}), ` +
+          `Fallback parser failed (${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)})`
+        );
       }
     }
   },
@@ -594,7 +601,7 @@ async function processExcel(data: Buffer | string, ext: string): Promise<Partial
     return streamCsvStrategy(data as string);
   } else {
     // Для Excel файлов загружаем через ExcelJS
-    await workbook.xlsx.load(data as Buffer);
+    await workbook.xlsx.load(data as any);
   }
   
   const sheets: Record<string, unknown[]> = {};
@@ -644,8 +651,8 @@ export class FileToJsonNode implements INodeType {
     description:
       "DOCX / XML / YML / XLSX / CSV / PDF / TXT / PPTX / HTML → JSON|text",
     defaults: { name: "Convert File to JSON" },
-    inputs: [NodeConnectionType.Main],
-    outputs: [NodeConnectionType.Main],
+    inputs: [NodeConnectionTypes.Main],
+    outputs: [NodeConnectionTypes.Main],
     properties: [
       {
         displayName: "Binary Property",
@@ -763,6 +770,15 @@ export class FileToJsonNode implements INodeType {
         }
         json = await strategies[ext](buf, ext);
       } catch (e) {
+        // Пробрасываем специализированные ошибки как есть
+        if (e instanceof FileTypeError || 
+            e instanceof FileTooLargeError ||
+            e instanceof UnsupportedFormatError ||
+            e instanceof EmptyFileError ||
+            e instanceof ProcessingError) {
+          throw e;
+        }
+        // Оборачиваем только неизвестные ошибки
         throw new ProcessingError(`${ext.toUpperCase()} processing error: ${(e as Error).message}`);
       }
       

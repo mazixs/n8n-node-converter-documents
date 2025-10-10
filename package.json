@@ -1,6 +1,6 @@
 {
   "name": "@mazix/n8n-nodes-converter-documents",
-  "version": "1.0.12",
+  "version": "1.0.14",
   "description": "n8n node to convert various document formats (DOCX, XML, YML, XLS, XLSX, CSV, PDF, TXT, PPT, PPTX, HTML, JSON, ODT, ODP, ODS) to JSON or text format",
   "main": "dist/FileToJsonNode.node.js",
   "scripts": {
@@ -93,6 +93,9 @@
   },
   "peerDependencies": {
     "n8n-workflow": "*"
+  },
+  "overrides": {
+    "form-data": ">=4.0.4"
   },
   "n8n": {
     "n8nNodesApiVersion": 1,
