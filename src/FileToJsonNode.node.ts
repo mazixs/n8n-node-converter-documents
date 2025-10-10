@@ -351,7 +351,7 @@ function processYandexMarketYml(parsed: YmlCatalog): Partial<JsonResult> {
 }
 
 // Стратегии обработки форматов
-const strategies: Record<string, (buf: Buffer, ext?: string) => Promise<Partial<JsonResult>>> = {
+const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputFormat?: string }) => Promise<Partial<JsonResult>>> = {
   doc: async (buf) => {
     try {
       // Проверяем, является ли это старым DOC файлом (CFB формат)
@@ -382,7 +382,24 @@ const strategies: Record<string, (buf: Buffer, ext?: string) => Promise<Partial<
       throw new ProcessingError(`DOC processing error: ${error instanceof Error ? error.message : String(error)}`);
     }
   },
-  docx: async (buf) => {
+  docx: async (buf, _ext, options) => {
+    const outputFormat = options?.outputFormat || 'text';
+    
+    // Если запрошен HTML формат - используем mammoth.convertToHtml
+    if (outputFormat === 'html') {
+      try {
+        const result = await mammoth.convertToHtml({ buffer: buf });
+        if (result.value && result.value.trim().length > 0) {
+          return { text: result.value };
+        }
+        // Если вернул пустую строку - пробуем fallback
+      } catch {
+        // Ошибка mammoth HTML - пробуем fallback
+      }
+    }
+    
+    // Plain text режим (по умолчанию) или fallback для HTML
+    
     // Попытка 1: officeparser
     try {
       const text = await extractViaOfficeParser(buf);
@@ -394,7 +411,7 @@ const strategies: Record<string, (buf: Buffer, ext?: string) => Promise<Partial<
       // Ошибка officeparser - пробуем дальше
     }
     
-    // Попытка 2: mammoth
+    // Попытка 2: mammoth (text)
     try {
       const result = await mammoth.extractRawText({ buffer: buf });
       if (result.value && result.value.trim().length > 0) {
@@ -757,6 +774,25 @@ export class FileToJsonNode implements INodeType {
           maxValue: 10
         }
       },
+      {
+        displayName: "Output Format (DOCX)",
+        name: "outputFormat",
+        type: "options",
+        options: [
+          {
+            name: "Plain Text",
+            value: "text",
+            description: "Extract text only (fastest, smallest output)",
+          },
+          {
+            name: "HTML",
+            value: "html",
+            description: "Convert to HTML (preserves tables, formatting, structure)",
+          },
+        ],
+        default: "text",
+        description: "Choose output format for DOCX files. HTML format preserves tables and formatting, making it better for AI/LLM processing.",
+      },
     ],
   };
 
@@ -838,11 +874,15 @@ export class FileToJsonNode implements INodeType {
       let json: Partial<JsonResult> = {};
       const startTime = performance.now();
       
+      // Получаем outputFormat для DOCX файлов
+      const outputFormat = this.getNodeParameter('outputFormat', i, 'text') as string;
+      
       try {
         if (!strategies[ext]) {
           throw new UnsupportedFormatError(`Format "${ext}" is not supported`);
         }
-        json = await strategies[ext](buf, ext);
+        // Передаем outputFormat только для DOCX
+        json = await strategies[ext](buf, ext, ext === 'docx' ? { outputFormat } : undefined);
       } catch (e) {
         // Пробрасываем специализированные ошибки как есть
         if (e instanceof FileTypeError || 
