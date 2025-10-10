@@ -32,10 +32,11 @@ import sanitizeHtml from "sanitize-html";
 // Официальные типы n8n
 import { 
   IExecuteFunctions,
+  INodeExecutionData,
+  INodeType,
+  INodeTypeDescription,
+  NodeConnectionType,
 } from 'n8n-workflow';
-
-// Типы n8n (заменить any на реальные типы при наличии)
-// import { IExecuteFunctions } from 'n8n-workflow';
 
 interface JsonTextResult {
   text: string;
@@ -633,8 +634,8 @@ async function processHtml(buf: Buffer): Promise<Partial<JsonResult>> {
  * Custom n8n node: convert files to JSON/text
  * Supports DOCX, XML, YML, XLSX, CSV, PDF, TXT, PPTX, HTML
  */
-class FileToJsonNode {
-  description = {
+export class FileToJsonNode implements INodeType {
+  description: INodeTypeDescription = {
     displayName: "Convert File to JSON",
     name: "convertFileToJson",
     icon: "file:icon.svg",
@@ -643,8 +644,8 @@ class FileToJsonNode {
     description:
       "DOCX / XML / YML / XLSX / CSV / PDF / TXT / PPTX / HTML → JSON|text",
     defaults: { name: "Convert File to JSON" },
-    inputs: ["main"],
-    outputs: ["main"],
+    inputs: [NodeConnectionType.Main],
+    outputs: [NodeConnectionType.Main],
     properties: [
       {
         displayName: "Binary Property",
@@ -681,13 +682,12 @@ class FileToJsonNode {
   /**
    * Main execution method for n8n node
    */
-  async execute(this: IExecuteFunctions): Promise<unknown[]> {
+  async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
     const items = this.getInputData();
     const supported = [
       "doc",
       "docx",
       "xml",
-      "yml",
       "xlsx",
       "csv",
       "pdf",
@@ -703,7 +703,7 @@ class FileToJsonNode {
     const maxFileSize = (this.getNodeParameter('maxFileSize', 0, 50) as number) * 1024 * 1024; // MB в байты
     const maxConcurrency = this.getNodeParameter('maxConcurrency', 0, 4) as number;
 
-    const processItem = async (item: unknown, i: number) => {
+    const processItem = async (item: unknown, i: number): Promise<INodeExecutionData> => {
       const prop = this.getNodeParameter("binaryPropertyName", i, "data");
               // --- Input data validation ---
       if (!item || typeof item !== "object")
@@ -795,7 +795,10 @@ class FileToJsonNode {
         processedAt: new Date().toISOString(),
       };
 
-      return { json };
+      return {
+        json: json as INodeExecutionData['json'],
+        pairedItem: { item: i },
+      };
     };
 
     const results = await promisePool(items, processItem, maxConcurrency);
@@ -811,4 +814,4 @@ class FileToJsonNode {
   }
 }
 
-export { FileToJsonNode };
+// Export уже выполнен в объявлении класса
