@@ -25,7 +25,7 @@ describe('DOCX Tables Extraction', () => {
         return;
       }
       
-      const tables: any[] = [];
+      const tables: unknown[] = [];
       
       // Обходим элементы body
       for (const item of body) {
@@ -38,35 +38,39 @@ describe('DOCX Tables Extraction', () => {
       console.log(`Found ${tables.length} tables\n`);
       
       if (tables.length > 0) {
-        const firstTable = tables[0];
+        const firstTable = tables[0] as Record<string, unknown>;
         
         // Извлекаем строки
-        const rows = firstTable['w:tr'] || [];
+        const rows = (firstTable['w:tr'] || []) as unknown[];
         console.log(`Table 1: ${rows.length} rows\n`);
         
         // Анализируем каждую строку
-        rows.slice(0, 3).forEach((row: any, rowIndex: number) => {
-          const cells = row['w:tc'] || [];
+        rows.slice(0, 3).forEach((row: unknown, rowIndex: number) => {
+          const rowObj = row as Record<string, unknown>;
+          const cells = (rowObj['w:tc'] || []) as unknown[];
           console.log(`Row ${rowIndex + 1}: ${cells.length} cells`);
           
           // DEBUG: Проверим структуру первой ячейки
           if (rowIndex === 0 && cells.length > 0) {
-            console.log('  DEBUG - First cell keys:', Object.keys(cells[0]).slice(0, 10));
-            console.log('  DEBUG - Has w:p?', !!cells[0]['w:p']);
-            if (cells[0]['w:p']) {
-              const paragraphs = Array.isArray(cells[0]['w:p']) ? cells[0]['w:p'] : [cells[0]['w:p']];
+            const firstCell = cells[0] as Record<string, unknown>;
+            console.log('  DEBUG - First cell keys:', Object.keys(firstCell).slice(0, 10));
+            console.log('  DEBUG - Has w:p?', !!firstCell['w:p']);
+            if (firstCell['w:p']) {
+              const paragraphs = Array.isArray(firstCell['w:p']) ? firstCell['w:p'] : [firstCell['w:p']];
               console.log('  DEBUG - Paragraphs:', paragraphs.length);
               if (paragraphs[0]) {
-                console.log('  DEBUG - First paragraph keys:', Object.keys(paragraphs[0]).slice(0, 5));
-                console.log('  DEBUG - Has w:r?', !!paragraphs[0]['w:r']);
-                if (paragraphs[0]['w:r']) {
-                  const runs = Array.isArray(paragraphs[0]['w:r']) ? paragraphs[0]['w:r'] : [paragraphs[0]['w:r']];
+                const firstPara = paragraphs[0] as Record<string, unknown>;
+                console.log('  DEBUG - First paragraph keys:', Object.keys(firstPara).slice(0, 5));
+                console.log('  DEBUG - Has w:r?', !!firstPara['w:r']);
+                if (firstPara['w:r']) {
+                  const runs = Array.isArray(firstPara['w:r']) ? firstPara['w:r'] : [firstPara['w:r']];
                   console.log('  DEBUG - Runs:', runs.length);
                   if (runs[0]) {
-                    console.log('  DEBUG - First run keys:', Object.keys(runs[0]).slice(0, 5));
-                    console.log('  DEBUG - Has w:t?', !!runs[0]['w:t']);
-                    if (runs[0]['w:t']) {
-                      console.log('  DEBUG - w:t content:', JSON.stringify(runs[0]['w:t']));
+                    const firstRun = runs[0] as Record<string, unknown>;
+                    console.log('  DEBUG - First run keys:', Object.keys(firstRun).slice(0, 5));
+                    console.log('  DEBUG - Has w:t?', !!firstRun['w:t']);
+                    if (firstRun['w:t']) {
+                      console.log('  DEBUG - w:t content:', JSON.stringify(firstRun['w:t']));
                     }
                   }
                 }
@@ -74,7 +78,7 @@ describe('DOCX Tables Extraction', () => {
             }
           }
           
-          cells.forEach((cell: any, cellIndex: number) => {
+          cells.forEach((cell: unknown, cellIndex: number) => {
             // Извлекаем текст из ячейки
             const text = extractTextFromCell(cell);
             console.log(`  Cell ${cellIndex + 1}: "${text}"`);
@@ -89,11 +93,11 @@ describe('DOCX Tables Extraction', () => {
 });
 
 // Вспомогательная функция для извлечения текста из ячейки
-function extractTextFromCell(cell: any): string {
+function extractTextFromCell(cell: unknown): string {
   const textParts: string[] = [];
   const visited = new WeakSet(); // Защита от циклических ссылок
   
-  const extractText = (obj: any, isInsideTextNode = false): void => {
+  const extractText = (obj: unknown, isInsideTextNode = false): void => {
     if (!obj) return;
     
     // Защита от циклов
@@ -109,9 +113,12 @@ function extractTextFromCell(cell: any): string {
         return;
       }
       // xml2js помещает текст в поле '_'
-      if (typeof obj === 'object' && obj['_']) {
-        textParts.push(obj['_']);
-        return;
+      if (typeof obj === 'object') {
+        const objRecord = obj as Record<string, unknown>;
+        if (objRecord['_'] && typeof objRecord['_'] === 'string') {
+          textParts.push(objRecord['_']);
+          return;
+        }
       }
     }
     
@@ -121,18 +128,19 @@ function extractTextFromCell(cell: any): string {
     }
     
     if (typeof obj === 'object') {
+      const objRecord = obj as Record<string, unknown>;
       // Нашли текстовый тег
-      if (obj['w:t'] || obj['a:t']) {
-        const textNode = obj['w:t'] || obj['a:t'];
+      if (objRecord['w:t'] || objRecord['a:t']) {
+        const textNode = objRecord['w:t'] || objRecord['a:t'];
         extractText(textNode, true);
         return; // Не обходим остальные свойства этого объекта
       }
       
       // Обходим все дочерние элементы
-      for (const key of Object.keys(obj)) {
+      for (const key of Object.keys(objRecord)) {
         // Пропускаем атрибуты и metadata
         if (!key.startsWith('$') && key !== 'w:rsidR' && key !== 'w:rsidRPr') {
-          extractText(obj[key], false);
+          extractText(objRecord[key], false);
         }
       }
     }
