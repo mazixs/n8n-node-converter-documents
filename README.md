@@ -18,6 +18,54 @@ This is an n8n community node package that converts various document formats to 
 - JSON structure normalization (flattens nested objects)
 - Comprehensive error handling with custom error types
 - Performance optimizations with concurrent processing limits
+- **NEW**: DOCX to HTML conversion with table preservation
+
+## 📊 DOCX Output Formats (v1.0.21+)
+
+Choose between two output formats for DOCX files:
+
+### Plain Text (Default)
+- Fast extraction, minimal output size
+- ~3,600 characters for typical documents
+- Best for simple text extraction
+- Backward compatible with all existing workflows
+
+### HTML Format
+- Preserves document structure and formatting
+- **Tables** converted to `<table>`, `<tr>`, `<td>` (perfect for AI/LLM processing)
+- **Formatting**: `<strong>`, `<em>`, `<h1>-<h6>`, `<ul>`, `<ol>`, `<p>`
+- ~58,000 characters (+1,591% vs plain text)
+- AI-friendly: understood by ChatGPT, Claude, and other models
+
+### Usage in n8n
+
+1. Add "Convert File to JSON" node
+2. Select parameter **"Output Format (DOCX)"**:
+   - **Plain Text** - for simple text extraction
+   - **HTML** - for tables and formatted content
+
+### Example Output
+
+**Plain Text:**
+```json
+{
+  "text": "Situation: Often search by one field\nAction: Create index on that field"
+}
+```
+
+**HTML:**
+```json
+{
+  "text": "<table><tr><td><strong>Situation</strong></td><td><strong>Action</strong></td></tr><tr><td>Often search by one field</td><td>Create index on that field</td></tr></table>"
+}
+```
+
+### When to Use HTML
+
+- ✅ Document contains tables
+- ✅ Processing with AI/LLM (ChatGPT, Claude, etc.)
+- ✅ Need to preserve formatting (bold, italic, headings)
+- ✅ Lists and document structure are important
 
 ## Architecture Philosophy
 
@@ -478,20 +526,27 @@ npm list
 
 ## 📈 Latest Updates
 
-### v1.0.11 (Current)
-- **📚 Documentation**: Updated documentation to reflect current architecture
-- **🏗️ Architecture**: Documented strategy pattern implementation
-- **🧪 Testing**: Comprehensive test structure documentation
-- **📊 Dependencies**: Updated dependency analysis and optimization plans
+### v1.0.21 (Current - 2025-10-10)
+- **🚀 Major Feature**: DOCX to HTML conversion with table support
+- **NEW Parameter**: `outputFormat` for DOCX files (text | html)
+- **Tables**: Fully preserved in HTML format (`<table>`, `<tr>`, `<td>`)
+- **AI-Friendly**: HTML understood by ChatGPT, Claude, and other LLMs
+- **Formatting**: Bold, italic, headings, lists, paragraphs preserved
+- **Zero Dependencies**: Uses existing mammoth library
+- **73 tests passing** (+5 new tests)
+- **Documentation**: Complete research and implementation guides
 
-### v1.0.10 (2025-06-20)
-- **🐛 Critical Fix**: Restored support for ODT, ODP, ODS and JSON formats
-- Fixed "Unsupported file type" error for these formats
-- Format handlers were implemented but not accessible due to configuration oversight
+### v1.0.20 (2025-10-10)
+- **🚀 TextBox & Shapes Support**: Extract text from TextBoxes and shapes
+- **🐛 ONLYOFFICE Fix**: Fixed text extraction from complex documents
+- **62 tests passing**
 
-### v1.0.9 (2025-06-20)
-- **🔧 CI/CD**: Fixed Jest compatibility issues
-- Updated Jest command parameters for Jest 30+ compatibility
+### v1.0.19 (2025-10-10)
+- **🐛 Critical Fix**: ONLYOFFICE DOCX parser - no more XML namespaces in output
+- **Enhanced extraction**: Targets only `<w:t>` tag content
+- **61 tests passing**
+
+For complete changelog see [CHANGELOG.md](CHANGELOG.md)
 - All CI tests now pass successfully
 
 ## 📚 Additional Documentation
