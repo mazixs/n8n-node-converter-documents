@@ -33,7 +33,7 @@
 
 ### В n8n workflow:
 
-1. Добавьте узел "Convert File to JSON"
+1. Добавьте узел "Document Converter"
 2. Выберите параметр **"Output Format (DOCX)"**:
    - **Plain Text** (по умолчанию) — обычный текст без форматирования
    - **HTML** — HTML с таблицами и форматированием

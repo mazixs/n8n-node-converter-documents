@@ -734,14 +734,14 @@ async function processHtml(buf: Buffer): Promise<Partial<JsonResult>> {
  */
 export class FileToJsonNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: "Convert File to JSON",
+    displayName: "Document Converter",
     name: "convertFileToJson",
     icon: "file:icon.svg",
     group: ["transform"],
     version: 5,
     description:
-      "DOCX / XML / YML / XLSX / CSV / PDF / TXT / PPTX / HTML → JSON|text",
-    defaults: { name: "Convert File to JSON" },
+      "Convert documents to text/JSON (DOCX→HTML, XLSX→sheets, PDF→text, etc.)",
+    defaults: { name: "Document Converter" },
     inputs: [NodeConnectionTypes.Main],
     outputs: [NodeConnectionTypes.Main],
     properties: [

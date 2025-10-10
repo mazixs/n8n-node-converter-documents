@@ -51,7 +51,7 @@ npm install @mazix/n8n-nodes-converter-documents
 
 ### Использование
 
-1. Добавьте узел "Convert File to JSON" в workflow
+1. Добавьте узел "Document Converter" в workflow
 2. Подключите файл из предыдущего узла
 3. Настройте параметры (опционально)
 4. Запустите workflow
