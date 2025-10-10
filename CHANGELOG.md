@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.0.15] - 2025-10-10
+
+### 🐛 Bug Fixes
+- **Error Messages**: Fixed hardcoded file size limit in error message
+  - `FileTooLargeError` now displays actual configured limit instead of always showing "50 MB"
+  - Users can set custom limits up to 100 MB in node settings
+  - Error message now dynamically shows: `"File is too large (maximum XX MB)"` where XX is the configured value
+  - Example: If limit set to 80 MB, error will show "maximum 80 MB" instead of "maximum 50 MB"
+
+### 🔧 Technical Details
+- Modified error throw statement in line 735 to use dynamic `maxFileSize` parameter
+- No functional changes to size validation logic - it already worked correctly
+- Purely cosmetic fix to improve user experience and clarity
+
+### 📋 Files Changed
+- `src/FileToJsonNode.node.ts`: Updated FileTooLargeError message to be dynamic
+
+---
+
 ## [1.0.14] - 2025-10-10
 
 ### 🐛 Critical Bug Fixes

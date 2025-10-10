@@ -732,7 +732,7 @@ export class FileToJsonNode implements INodeType {
       if (!Buffer.isBuffer(buf) || buf.length === 0)
         throw new EmptyFileError("File is empty or contains no data");
       if (buf.length > maxFileSize)
-        throw new FileTooLargeError("File is too large (maximum 50 MB)");
+        throw new FileTooLargeError(`File is too large (maximum ${maxFileSize / 1024 / 1024} MB)`);
               // --- End of validation ---
       const name = sanitizeFileName(binaryProp.fileName ?? "");
       let ext = path.extname(name).slice(1).toLowerCase();
