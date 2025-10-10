@@ -1,203 +1,23 @@
-name: Release Pipeline
+name: Release
 
 on:
   push:
     tags:
       - 'v*.*.*'
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Tag version to release (e.g., v1.0.0)'
-        required: true
-        type: string
 
 permissions:
   contents: write
-  actions: read
-  checks: write
 
 jobs:
-  # Сначала запускаем все тесты
-  test:
-    name: Run Tests Before Release
-    uses: ./.github/workflows/ci.yml
-    secrets: inherit
-
-  # Создаем релиз только после успешного прохождения тестов
   release:
-    name: Create GitHub Release
+    name: Release & Publish
     runs-on: ubuntu-latest
-    needs: test
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      tag: ${{ steps.version.outputs.tag }}
     
     steps:
-    - name: Checkout Repository
+    - name: Checkout
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Нужно для генерации changelog
-        
+      
     - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20.x'
-        cache: 'npm'
-        
-    - name: Install Dependencies
-      run: npm ci
-      
-    - name: Build Project
-      run: npm run build
-      
-    - name: Verify Build Artifacts
-      run: |
-        if [ ! -d "dist" ]; then
-          echo "❌ Build artifacts not found!"
-          exit 1
-        fi
-        
-        if [ ! -f "dist/FileToJsonNode.node.js" ]; then
-          echo "❌ Main build file not found!"
-          exit 1
-        fi
-        
-        echo "✅ Build artifacts verified"
-        ls -la dist/
-        
-    - name: Get Version from Tag
-      id: version
-      run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          TAG="${{ github.event.inputs.tag }}"
-        else
-          TAG=${GITHUB_REF#refs/tags/}
-        fi
-        echo "tag=$TAG" >> $GITHUB_OUTPUT
-        echo "version=${TAG#v}" >> $GITHUB_OUTPUT
-        echo "Release version: $TAG"
-        
-    - name: Update Package Version
-      run: |
-        CURRENT_VERSION=$(node -p "require('./package.json').version")
-        TARGET_VERSION="${{ steps.version.outputs.version }}"
-        
-        if [ "$CURRENT_VERSION" != "$TARGET_VERSION" ]; then
-          npm version $TARGET_VERSION --no-git-tag-version
-          echo "✅ Package version updated from $CURRENT_VERSION to $TARGET_VERSION"
-        else
-          echo "✅ Package version is already $TARGET_VERSION - no update needed"
-        fi
-        
-    - name: Generate Changelog
-      id: changelog
-      run: |
-        echo "# 🚀 Release ${{ steps.version.outputs.tag }}" > CHANGELOG.md
-        echo "" >> CHANGELOG.md
-        echo "## 📋 Changes in this release:" >> CHANGELOG.md
-        echo "" >> CHANGELOG.md
-        
-        # Получаем коммиты с последнего тега (с улучшенной обработкой ошибок)
-        LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-        if [ -n "$LAST_TAG" ] && [ "$LAST_TAG" != "${{ steps.version.outputs.tag }}" ]; then
-          echo "### 📝 Commits since $LAST_TAG:" >> CHANGELOG.md
-          COMMIT_COUNT=$(git rev-list $LAST_TAG..HEAD --count 2>/dev/null || echo "0")
-          if [ "$COMMIT_COUNT" -gt "0" ]; then
-            git log $LAST_TAG..HEAD --pretty=format:"- %s (%h)" --no-merges >> CHANGELOG.md
-          else
-            echo "- No new commits since last tag" >> CHANGELOG.md
-          fi
-        else
-          echo "### 📝 All commits:" >> CHANGELOG.md
-          TOTAL_COMMITS=$(git rev-list HEAD --count 2>/dev/null || echo "0")
-          if [ "$TOTAL_COMMITS" -gt "0" ]; then
-            git log --pretty=format:"- %s (%h)" --no-merges --max-count=20 >> CHANGELOG.md
-            if [ "$TOTAL_COMMITS" -gt "20" ]; then
-              echo "" >> CHANGELOG.md
-              echo "- ... and $(($TOTAL_COMMITS - 20)) more commits" >> CHANGELOG.md
-            fi
-          else
-            echo "- Initial release" >> CHANGELOG.md
-          fi
-        fi
-        
-        echo "" >> CHANGELOG.md
-        echo "## 🏗️ Build Information:" >> CHANGELOG.md
-        echo "- **Built on:** $(date)" >> CHANGELOG.md
-        echo "- **Node.js version:** $(node --version)" >> CHANGELOG.md
-        echo "- **npm version:** $(npm --version)" >> CHANGELOG.md
-        echo "- **Git commit:** $(git rev-parse HEAD)" >> CHANGELOG.md
-        
-        # Показываем changelog
-        echo "Generated changelog:"
-        cat CHANGELOG.md
-        
-    - name: Create Build Archive
-      run: |
-        # Создаем список файлов для архива
-        ARCHIVE_FILES="dist/ package.json README.md"
-        
-        # Добавляем audit.md если он существует
-        if [ -f "docs/audit.md" ]; then
-          ARCHIVE_FILES="$ARCHIVE_FILES docs/audit.md"
-          echo "✅ Including docs/audit.md in archive"
-        else
-          echo "ℹ️ docs/audit.md not found, skipping"
-        fi
-        
-        # Создаем архив с артефактами сборки
-        tar -czf n8n-node-converter-documents-${{ steps.version.outputs.version }}.tar.gz $ARCHIVE_FILES
-        
-        # Проверяем что создался
-        if [ -f "n8n-node-converter-documents-${{ steps.version.outputs.version }}.tar.gz" ]; then
-          ls -la *.tar.gz
-          echo "✅ Build archive created successfully"
-        else
-          echo "❌ Failed to create build archive"
-          exit 1
-        fi
-        
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v2
-      id: create_release
-      if: github.ref_type == 'tag'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ steps.version.outputs.tag }}
-        name: 🚀 Release ${{ steps.version.outputs.tag }}
-        body_path: CHANGELOG.md
-        draft: false
-        prerelease: false
-        generate_release_notes: true
-        make_latest: true
-        preserve_order: true
-        files: |
-          n8n-node-converter-documents-${{ steps.version.outputs.version }}.tar.gz
-          package.json
-        
-    - name: Release Summary
-      run: |
-        echo "## 🎉 Release Summary" >> $GITHUB_STEP_SUMMARY
-        echo "- **Tag:** ${{ steps.version.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Release URL:** ${{ steps.create_release.outputs.url }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Release ID:** ${{ steps.create_release.outputs.id }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Upload URL:** ${{ steps.create_release.outputs.upload_url }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Assets:** ${{ steps.create_release.outputs.assets }}" >> $GITHUB_STEP_SUMMARY
-
-  # Публикация в npm
-  publish-npm:
-    name: Publish to npm
-    runs-on: ubuntu-latest
-    needs: [test, release]
-    if: github.ref_type == 'tag'
-    
-    steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js for npm
       uses: actions/setup-node@v4
       with:
         node-version: '20.x'
@@ -207,67 +27,35 @@ jobs:
     - name: Install Dependencies
       run: npm ci
       
-    - name: Build Project
+    - name: Build
       run: npm run build
       
-    - name: Verify Build Artifacts
+    - name: Test
+      run: npm test
+      
+    - name: Get Version
+      id: version
       run: |
-        if [ ! -d "dist" ]; then
-          echo "❌ Build artifacts not found!"
-          exit 1
-        fi
+        TAG=${GITHUB_REF#refs/tags/}
+        echo "tag=$TAG" >> $GITHUB_OUTPUT
+        echo "version=${TAG#v}" >> $GITHUB_OUTPUT
         
-        echo "✅ Build artifacts verified:"
-        ls -la dist/
-        
-    - name: Verify Package Contents
-      run: |
-        echo "📦 Package contents (dry-run):"
-        npm pack --dry-run 2>&1 | grep "npm notice"
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.version.outputs.tag }}
+        name: Release ${{ steps.version.outputs.tag }}
+        generate_release_notes: true
+        draft: false
+        prerelease: false
         
     - name: Publish to npm
       run: npm publish --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      
-    - name: Publish Summary
-      run: |
-        echo "## 📦 npm Publication Summary" >> $GITHUB_STEP_SUMMARY
-        echo "- **Package:** @mazix/n8n-nodes-converter-documents" >> $GITHUB_STEP_SUMMARY
-        echo "- **Version:** ${{ needs.release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Registry:** https://www.npmjs.com/package/@mazix/n8n-nodes-converter-documents" >> $GITHUB_STEP_SUMMARY
-        echo "- **Published at:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "✅ Package successfully published to npm!" >> $GITHUB_STEP_SUMMARY
-
-  # Уведомление о релизе
-  notify:
-    name: Post-Release Notification
-    runs-on: ubuntu-latest
-    needs: [test, release, publish-npm]
-    if: always()
-    
-    steps:
-    - name: Notify Success
-      if: needs.release.result == 'success' && needs.publish-npm.result == 'success'
-      run: |
-        echo "🎉 Release completed successfully!"
-        echo "✅ Tests passed"
-        echo "✅ Release created"
-        echo "✅ Assets uploaded"
-        echo "✅ Published to npm"
         
-    - name: Notify Failure
-      if: needs.release.result == 'failure' || needs.test.result == 'failure' || needs.publish-npm.result == 'failure'
+    - name: Summary
       run: |
-        echo "❌ Release failed!"
-        if [ "${{ needs.test.result }}" = "failure" ]; then
-          echo "❌ Tests failed"
-        fi
-        if [ "${{ needs.release.result }}" = "failure" ]; then
-          echo "❌ Release creation failed"
-        fi
-        if [ "${{ needs.publish-npm.result }}" = "failure" ]; then
-          echo "❌ npm publication failed"
-        fi
-        exit 1 
+        echo "## 🎉 Release Complete" >> $GITHUB_STEP_SUMMARY
+        echo "- Version: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- npm: https://www.npmjs.com/package/@mazix/n8n-nodes-converter-documents" >> $GITHUB_STEP_SUMMARY
