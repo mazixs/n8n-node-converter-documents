@@ -390,7 +390,7 @@ const strategies: Record<string, (buf: Buffer, ext?: string) => Promise<Partial<
         return { text };
       }
       // Если вернул пустую строку - пробуем дальше
-    } catch (error) {
+    } catch {
       // Ошибка officeparser - пробуем дальше
     }
     
@@ -401,7 +401,7 @@ const strategies: Record<string, (buf: Buffer, ext?: string) => Promise<Partial<
         return { text: result.value };
       }
       // Если вернул пустую строку - пробуем дальше
-    } catch (error) {
+    } catch {
       // Ошибка mammoth - пробуем дальше
     }
     
@@ -416,7 +416,7 @@ const strategies: Record<string, (buf: Buffer, ext?: string) => Promise<Partial<
         const textParts: string[] = [];
         
         // Рекурсивная функция для поиска всех текстовых узлов
-        const extractText = (obj: any): void => {
+        const extractText = (obj: unknown): void => {
           if (!obj) return;
           
           if (typeof obj === 'string') {
@@ -430,12 +430,13 @@ const strategies: Record<string, (buf: Buffer, ext?: string) => Promise<Partial<
           }
           
           if (typeof obj === 'object') {
+            const objRecord = obj as Record<string, unknown>;
             // Ищем теги <w:t> (текстовые узлы Word)
-            if (obj['w:t']) {
-              extractText(obj['w:t']);
+            if (objRecord['w:t']) {
+              extractText(objRecord['w:t']);
             }
             // Рекурсивно обходим остальные свойства
-            Object.values(obj).forEach(value => extractText(value));
+            Object.values(objRecord).forEach(value => extractText(value));
           }
         };
         
@@ -446,7 +447,7 @@ const strategies: Record<string, (buf: Buffer, ext?: string) => Promise<Partial<
           return { text: extractedText };
         }
       }
-    } catch (zipError) {
+    } catch {
       // Даже прямой парсинг не помог
       throw new ProcessingError(
         `DOCX processing error: All parsers failed. ` +
@@ -537,12 +538,13 @@ const strategies: Record<string, (buf: Buffer, ext?: string) => Promise<Partial<
   xlsx: async (buf) => {
     // Используем ExcelJS напрямую для полной поддержки структуры Excel
     const workbook = new ExcelJS.Workbook();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await workbook.xlsx.load(buf as any);
     const sheets: Record<string, unknown[]> = {};
-    workbook.eachSheet((worksheet, _sheetId) => {
+    workbook.eachSheet((worksheet) => {
       const sheetName = worksheet.name;
       const jsonData: unknown[] = [];
-      worksheet.eachRow((row, _rowNumber) => {
+      worksheet.eachRow((row) => {
         const rowData: Record<string, unknown> = {};
         row.eachCell((cell, colNumber) => {
           const columnLetter = numberToColumn(colNumber - 1);
@@ -660,14 +662,15 @@ async function processExcel(data: Buffer | string, ext: string): Promise<Partial
     return streamCsvStrategy(data as string);
   } else {
     // Для Excel файлов загружаем через ExcelJS
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await workbook.xlsx.load(data as any);
   }
   
   const sheets: Record<string, unknown[]> = {};
-  workbook.eachSheet((worksheet, _sheetId) => {
+  workbook.eachSheet((worksheet) => {
     const sheetName = worksheet.name;
     const jsonData: unknown[] = [];
-    worksheet.eachRow((row, _rowNumber) => {
+    worksheet.eachRow((row) => {
       const rowData: Record<string, unknown> = {};
       row.eachCell((cell, colNumber) => {
         const columnLetter = numberToColumn(colNumber);

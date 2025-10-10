@@ -6,7 +6,6 @@ jest.setTimeout(30000);
 
 // Типы для global объекта
 declare global {
-  // eslint-disable-next-line no-var
   var mockN8nHelpers: {
     getBinaryDataBuffer: jest.Mock;
   };

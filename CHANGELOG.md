@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.0.17] - 2025-10-10
+
+### 🔧 Code Quality
+- **ESLint Fixes**: Fixed all linter errors and warnings
+  - Removed unused `error` and `zipError` variables in catch blocks
+  - Fixed `any` type usage with proper type assertions and eslint-disable comments
+  - Removed unused function parameters (`_sheetId`, `_rowNumber`)
+  - Cleaned up unused eslint-disable directive in test/setup.ts
+  
+- **CI/CD**: Added lint step to release workflow
+  - Release workflow now runs: Lint → Build → Test before publishing
+  - Prevents releases with code quality issues
+  - CI workflow already had lint step
+
+### 📋 Files Changed
+- `src/FileToJsonNode.node.ts`: Fixed 6 eslint errors
+- `test/setup.ts`: Removed 1 eslint warning
+- `.github/workflows/release.yml`: Added lint step
+
+### 🎯 Impact
+- **For Developers**: Code quality gates ensure clean releases
+- **For CI/CD**: No more releases with linter errors
+
+---
+
 ## [1.0.16] - 2025-10-10
 
 ### 🚀 Features
