@@ -38,20 +38,53 @@
    - Перейдите на https://www.npmjs.com/
    - Войдите в свой аккаунт
 
-2. **Создайте Access Token:**
+2. **Создайте Granular Access Token (рекомендуется):**
    ```
-   Профиль → Access Tokens → Generate New Token
+   Профиль → Access Tokens → Generate New Token → Granular Access Token
    
-   Тип токена: Automation (для CI/CD)
+   Настройки токена:
+   ┌─────────────────────────────────────────────┐
+   │ Token name: GitHub Actions CI/CD            │
+   │ Expiration: 365 days (или другой срок)      │
+   │                                             │
+   │ Packages and scopes:                        │
+   │ ● Selected packages and scopes              │
+   │   └─ @mazix/n8n-nodes-converter-documents   │
+   │                                             │
+   │ Permissions:                                │
+   │ ☑ Read and write (для publish)             │
+   │ ☐ Read only                                 │
+   │                                             │
+   │ Organizations (если применимо):             │
+   │ ☑ @mazix                                    │
+   └─────────────────────────────────────────────┘
    
-   ⚠️ ВАЖНО: Скопируйте токен сразу!
-   Он будет показан только один раз.
+   Кнопка: Generate Token
    ```
 
-3. **Формат токена:**
+3. **⚠️ ВАЖНО: Скопируйте токен сразу!**
    ```
+   Токен показывается только один раз:
    npm_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   
+   Сохраните его в безопасное место!
    ```
+
+### 🔀 Альтернатива: Classic Token (НЕ рекомендуется)
+
+```
+Если по какой-то причине нужен Classic Token:
+
+Профиль → Access Tokens → Generate New Token → Classic Token
+
+Тип: Automation
+
+⚠️ Недостатки Classic Token:
+- Полный доступ ко ВСЕМ пакетам аккаунта
+- Нельзя ограничить конкретным пакетом
+- Нельзя установить срок действия
+- Менее безопасно для CI/CD
+```
 
 ---
 
