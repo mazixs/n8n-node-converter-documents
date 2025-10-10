@@ -1,5 +1,53 @@
 # Changelog
 
+## [1.0.19] - 2025-10-10
+
+### 🐛 Critical Bug Fix
+- **ONLYOFFICE DOCX Parser**: Fixed XML namespace extraction bug
+  - **Problem**: Fallback parser extracted ALL string values from XML, including:
+    - `xmlns` attributes (`http://schemas.microsoft.com/office/word/...`)
+    - XML namespace URIs instead of actual text
+    - User reported seeing schemas instead of document text
+  - **Solution**: Enhanced extraction logic to target ONLY `<w:t>` tag content
+    - Added `isInsideTextNode` flag to track context
+    - Stops traversing after finding `w:t` tags
+    - Filters out XML attributes (starting with `$` or `rsid*`)
+    - Only traverses Word structural elements (`w:*`)
+
+### 🧪 Testing
+- **Added**: `test/integration/onlyoffice-docx.test.ts` - Specific test for ONLYOFFICE parsing
+- **Added**: `test/samples/onlyoffice-text.docx` - Test file with actual text
+- **Result**: All 61 tests passing (was 60)
+- **Verification**: No XML namespaces in extracted text ✅
+
+### 📊 Before vs After
+
+**Before (v1.0.16-1.0.18):**
+```
+Extracted: "http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas 
+http://schemas.microsoft.com/office/drawing/2014/chartex..."
+```
+
+**After (v1.0.19):**
+```
+Extracted: "Привет из ONLYOFFICE! Это тестовый документ для проверки парсинга."
+```
+
+### 📋 Files Changed
+- `src/FileToJsonNode.node.ts`: Fixed `extractText` function with context-aware parsing
+- `test/integration/onlyoffice-docx.test.ts`: New integration test
+- `test/samples/onlyoffice-text.docx`: New test file with text content
+
+### 🎯 Impact
+- **For Users**: ONLYOFFICE and other non-standard DOCX files now extract clean text
+- **For Developers**: Robust fallback parser for edge cases
+
+### ℹ️ Note
+File `onlyoffice1.docx` (938 KB) contains only an image, no text. This is not a bug - 
+the file genuinely has no `<w:t>` tags. Parser correctly returns empty text for such files.
+
+---
+
 ## [1.0.18] - 2025-10-10
 
 ### 🔒 Security & CI/CD

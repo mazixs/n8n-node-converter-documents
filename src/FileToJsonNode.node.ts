@@ -415,28 +415,37 @@ const strategies: Record<string, (buf: Buffer, ext?: string) => Promise<Partial<
         const parsed = await parseStringPromise(documentXml);
         const textParts: string[] = [];
         
-        // Рекурсивная функция для поиска всех текстовых узлов
-        const extractText = (obj: unknown): void => {
+        // Рекурсивная функция для поиска только w:t тегов (текстовые узлы Word)
+        const extractText = (obj: unknown, isInsideTextNode = false): void => {
           if (!obj) return;
           
-          if (typeof obj === 'string') {
+          // Если мы внутри w:t тега, извлекаем только строки
+          if (isInsideTextNode && typeof obj === 'string') {
             textParts.push(obj);
             return;
           }
           
           if (Array.isArray(obj)) {
-            obj.forEach(item => extractText(item));
+            obj.forEach(item => extractText(item, isInsideTextNode));
             return;
           }
           
           if (typeof obj === 'object') {
             const objRecord = obj as Record<string, unknown>;
-            // Ищем теги <w:t> (текстовые узлы Word)
+            
+            // Если нашли w:t тег - извлекаем его содержимое
             if (objRecord['w:t']) {
-              extractText(objRecord['w:t']);
+              extractText(objRecord['w:t'], true); // Флаг: мы внутри текстового узла
+              return; // НЕ обходим остальные свойства этого объекта
             }
-            // Рекурсивно обходим остальные свойства
-            Object.values(objRecord).forEach(value => extractText(value));
+            
+            // Продолжаем поиск w:t в дочерних элементах (только структурные теги)
+            for (const key of Object.keys(objRecord)) {
+              // Обходим только Word структурные элементы, игнорируем атрибуты
+              if (key.startsWith('w:') && key !== 'w:rsidR' && key !== 'w:rsidRPr' && !key.startsWith('$')) {
+                extractText(objRecord[key], false);
+              }
+            }
           }
         };
         
