@@ -54,7 +54,7 @@ describe('XLSX Sheets Processing', () => {
         });
         
         console.log(`  Rows with data: ${rowsWithData}`);
-        sheets[worksheet.name] = limitExcelSheet(jsonData);
+        sheets[worksheet.name] = limitExcelSheet(jsonData, 0);
       });
       
       console.log('\n=== RESULT STRUCTURE ===\n');
@@ -113,7 +113,7 @@ describe('XLSX Sheets Processing', () => {
           }
         });
         
-        sheets[sheetName] = limitExcelSheet(jsonData);
+        sheets[sheetName] = limitExcelSheet(jsonData, 0);
       });
       
       console.log('\n=== MULTIPLE SHEETS TEST ===\n');
@@ -162,7 +162,7 @@ describe('XLSX Sheets Processing', () => {
         B: i
       }));
       
-      const limited = limitExcelSheet(largeSheet);
+      const limited = limitExcelSheet(largeSheet, 10000);
       
       console.log('\n=== SIZE LIMITING ===');
       console.log(`Original rows: ${largeSheet.length}`);
@@ -179,7 +179,7 @@ describe('XLSX Sheets Processing', () => {
         A: `Row${i}`
       }));
       
-      const result = limitExcelSheet(smallSheet);
+      const result = limitExcelSheet(smallSheet, 10000);
       
       expect(result.length).toBe(100);
       expect(result).toEqual(smallSheet);
