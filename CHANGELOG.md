@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.1.0] - 2025-11-29
+
+### 🚀 New Features & Improvements
+
+- **🧠 Preserve Tables**: New option to keep HTML tables and structure when converting DOCX/HTML (Critical for RAG/LLM context).
+- **📊 Metadata Extraction**: Added metadata extraction (Author, Date, Title) for Office documents (DOCX, XLSX, PPTX).
+- **⚙️ CSV Control**: Added manual **CSV Delimiter** selection (Auto, Comma, Semicolon, Tab, Pipe).
+- **📈 Scalability**: Added **Max Excel Rows** parameter (0 = unlimited) to prevent OOM on large files.
+- **🛡️ Scanned PDF Detection**: Intelligent warning system for potential scanned PDFs (image-based).
+
+### 🛠 Performance & Optimization
+
+- **⚡ 10x Faster XML/YML**: Switched from `xml2js` to `fast-xml-parser` (streaming-ready logic).
+- **📉 Reduced Memory Usage**:
+  - Replaced `cheerio` (heavy DOM) with `node-html-parser` (lightweight).
+  - Removed `pdf-parse` (duplicate dependency).
+- **🔒 Reliability**:
+  - Refactored `Promise Pool` to isolated error handling (one bad file won't crash the batch).
+  - Upgraded `chardet` to `jschardet` for better encoding detection.
+  - Fixed `file-type` build compatibility issues.
+
 ## [1.0.22] - 2025-10-10
 
 ### 🎨 UI & Branding

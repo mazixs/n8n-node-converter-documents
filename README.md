@@ -150,7 +150,18 @@
 
 ---
 
-## 📊 XLSX Multi-Sheet Processing
+## � New in v1.1.0: Enhanced Controls
+
+### 🧠 HTML Table Preservation
+When converting **HTML** or **DOCX** (in HTML mode), tables are now preserved in the output. This is critical for **RAG/LLM contexts**, allowing AI models to understand structured data instead of flattened text.
+
+### ⚙️ Advanced CSV & Excel Control
+- **CSV Delimiter**: Manually select `,` `;` `\t` `|` or keep Auto.
+- **Max Excel Rows**: Limit rows per sheet (e.g., 1000) to prevent memory crashes on huge files.
+
+---
+
+## � XLSX Multi-Sheet Processing
 
 ### 🗂️ How It Works
 
@@ -178,7 +189,7 @@
 | **Column Names** | A, B, C... Z (Excel-style) |
 | **Row Format** | Array of objects (rows) |
 | **Empty Cells** | Skipped (only filled cells included) |
-| **Size Limit** | 10,000 rows per sheet (configurable) |
+| **Size Limit** | Configurable (default: 0 / unlimited) |
 | **Memory Safe** | Large files auto-limited to prevent OOM |
 
 ---
