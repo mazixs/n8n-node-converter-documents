@@ -1,5 +1,5 @@
 /*
- * Convert File to JSON v5
+ * Convert File to JSON v7
  * ─────────────────────────────────────────────────────────
  * Универсальный кастом-нод для n8n.
  * Поддерживает: DOC, DOCX, XML, XLS, XLSX, CSV, PDF, TXT,
@@ -7,13 +7,12 @@
  * Выход: { text: "..."} либо { sheets: {...} } + metadata.
  */
 
-import { parseStringPromise } from "xml2js";
+import { XMLParser } from "fast-xml-parser";
 import mammoth from "mammoth";
 import * as ExcelJS from "exceljs";
-import pdfParse from "pdf-parse";
-import * as cheerio from "cheerio";
-import { fileTypeFromBuffer } from "file-type";
-import chardet from "chardet";
+import { parse as parseHtml } from 'node-html-parser';
+import fileType from "file-type";
+import jschardet from "jschardet";
 import iconv from "iconv-lite";
 import path from "path";
 import { extractViaOfficeParser, limitExcelSheet } from "./helpers";
@@ -30,7 +29,6 @@ import { Readable } from "stream";
 import sanitizeHtml from "sanitize-html";
 import JSZip from "jszip";
 
-// Официальные типы n8n
 import { 
   IExecuteFunctions,
   INodeExecutionData,
@@ -52,35 +50,22 @@ interface JsonSheetResult {
 
 type JsonResult = JsonTextResult | JsonSheetResult;
 
-/**
- * Безопасная валидация и очистка имени файла
- */
 function sanitizeFileName(fileName: string): string {
   if (!fileName || typeof fileName !== 'string') {
     return 'unknown_file';
   }
-  
-  // Проверка на path traversal
   if (fileName.includes('..') || fileName.includes('/') || fileName.includes('\\')) {
     throw new FileTypeError('Invalid file name: contains path traversal characters');
   }
-  
-  // Удаляем опасные символы - создаем control characters regex программно
   const dangerousChars = /[<>:"|?*]/g;
   const controlChars = new RegExp('[' + String.fromCharCode(0) + '-' + String.fromCharCode(31) + String.fromCharCode(127) + '-' + String.fromCharCode(159) + ']', 'g');
   const sanitized = fileName.replace(dangerousChars, '_').replace(controlChars, '_');
-  
-  // Ограничиваем длину
   return sanitized.length > 255 ? sanitized.substring(0, 255) : sanitized;
 }
 
-/**
- * Проверка CFB формата (старые форматы DOC/PPT/XLS)
- */
 function checkCFBFormat(buf: Buffer, formatName: string, modernFormat: string): void {
   const signature = buf.slice(0, 8);
   const cfbSignature = Buffer.from([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]);
-  
   if (signature.equals(cfbSignature)) {
     throw new UnsupportedFormatError(
       `Старые ${formatName} файлы не поддерживаются. ` +
@@ -89,14 +74,47 @@ function checkCFBFormat(buf: Buffer, formatName: string, modernFormat: string): 
   }
 }
 
-/**
- * Унифицированный обработчик для OfficeParser форматов (ODT/ODP/ODS)
- */
+async function getOfficeMetadata(buf: Buffer): Promise<Record<string, unknown>> {
+  try {
+    const zip = await JSZip.loadAsync(buf);
+    const coreXml = await zip.file("docProps/core.xml")?.async("text");
+    if (!coreXml) return {};
+    
+    const parser = new XMLParser({ ignoreAttributes: false, removeNSPrefix: true });
+    const parsed = parser.parse(coreXml);
+    const coreProps = parsed.coreProperties || {};
+    
+    const metadata: Record<string, unknown> = {};
+    // Extract common Dublin Core properties
+    if (coreProps.creator && typeof coreProps.creator === 'string') metadata.author = coreProps.creator;
+    else if (coreProps.creator?.['#text']) metadata.author = coreProps.creator['#text'];
+
+    if (coreProps.created && typeof coreProps.created === 'string') metadata.created = coreProps.created;
+    else if (coreProps.created?.['#text']) metadata.created = coreProps.created['#text'];
+
+    if (coreProps.modified && typeof coreProps.modified === 'string') metadata.modified = coreProps.modified;
+    else if (coreProps.modified?.['#text']) metadata.modified = coreProps.modified['#text'];
+
+    if (coreProps.title && typeof coreProps.title === 'string') metadata.title = coreProps.title;
+    else if (coreProps.title?.['#text']) metadata.title = coreProps.title['#text'];
+    
+    return metadata;
+  } catch {
+    return {};
+  }
+}
+
+interface ProcessingOptions {
+  outputFormat?: string;
+  maxExcelRows?: number;
+  csvDelimiter?: string;
+  preserveTables?: boolean;
+}
+
 async function processViaOfficeParser(buf: Buffer, formatName: string): Promise<Partial<JsonResult>> {
   try {
     return { text: await extractViaOfficeParser(buf) };
   } catch (error) {
-    // Пробрасываем специализированные ошибки как есть
     if (error instanceof UnsupportedFormatError || error instanceof ProcessingError) {
       throw error;
     }
@@ -104,43 +122,52 @@ async function processViaOfficeParser(buf: Buffer, formatName: string): Promise<
   }
 }
 
-/**
- * Promise pool для ограничения количества одновременных задач
- */
+interface PromisePoolResult<R> {
+  status: 'fulfilled' | 'rejected';
+  value?: R;
+  reason?: any;
+}
+
 async function promisePool<T, R>(
   items: T[],
   worker: (item: T, index: number) => Promise<R>,
   concurrency: number
-): Promise<R[]> {
-  const results: R[] = [];
+): Promise<PromisePoolResult<R>[]> {
+  const results: PromisePoolResult<R>[] = new Array(items.length);
   let i = 0;
   const executing: Promise<void>[] = [];
 
   async function enqueue() {
     if (i >= items.length) return;
     const currentIndex = i++;
-    const p = worker(items[currentIndex], currentIndex).then((res) => {
-      results[currentIndex] = res;
+    const p = worker(items[currentIndex], currentIndex)
+      .then((res) => {
+        results[currentIndex] = { status: 'fulfilled', value: res };
+      })
+      .catch((err) => {
+        results[currentIndex] = { status: 'rejected', reason: err };
+      });
+    
+    const wrapped = p.then(() => {
+      executing.splice(executing.indexOf(wrapped), 1);
     });
-    executing.push(p.then(() => {
-      executing.splice(executing.indexOf(p), 1);
-    }));
-    if (executing.length < concurrency) {
-      await enqueue();
-    } else {
+    
+    executing.push(wrapped);
+    
+    if (executing.length >= concurrency) {
       await Promise.race(executing);
-      await enqueue();
     }
+    await enqueue();
   }
   await enqueue();
   await Promise.all(executing);
   return results;
 }
 
-const CSV_STREAM_ROW_LIMIT = 100000; // лимит строк для перехода на потоковую обработку
-const CSV_STREAM_SIZE_LIMIT = 10 * 1024 * 1024; // 10 МБ
-const TXT_STREAM_SIZE_LIMIT = 10 * 1024 * 1024; // 10 МБ
-const TXT_STREAM_CHAR_LIMIT = 1_000_000; // 1 млн символов
+const CSV_STREAM_ROW_LIMIT = 100000;
+const CSV_STREAM_SIZE_LIMIT = 10 * 1024 * 1024;
+const TXT_STREAM_SIZE_LIMIT = 10 * 1024 * 1024;
+const TXT_STREAM_CHAR_LIMIT = 1_000_000;
 
 async function streamTxtStrategy(buf: Buffer): Promise<Partial<JsonResult>> {
   return new Promise((resolve, reject) => {
@@ -167,33 +194,22 @@ async function streamTxtStrategy(buf: Buffer): Promise<Partial<JsonResult>> {
   });
 }
 
-/**
- * Конвертация номера колонки в букву (A, B, C...)
- */
 function numberToColumn(num: number): string {
   let result = '';
   while (num > 0) {
-    num--; // Делаем 0-based
+    num--;
     result = String.fromCharCode(65 + (num % 26)) + result;
     num = Math.floor(num / 26);
   }
   return result;
 }
 
-/**
- * Функция для нормализации JSON объектов
- * Преобразует многоуровневые структуры в плоский объект
- */
 function flattenJsonObject(obj: unknown, prefix: string = '', result: Record<string, unknown> = {}): Record<string, unknown> {
-  if (obj === null || obj === undefined) {
-    return result;
-  }
-
+  if (obj === null || obj === undefined) return result;
   if (typeof obj !== 'object' || obj instanceof Date || obj instanceof Buffer) {
     result[prefix || 'value'] = obj;
     return result;
   }
-
   if (Array.isArray(obj)) {
     obj.forEach((item, index) => {
       const key = prefix ? `${prefix}[${index}]` : `item_${index}`;
@@ -201,161 +217,82 @@ function flattenJsonObject(obj: unknown, prefix: string = '', result: Record<str
     });
     return result;
   }
-
   Object.keys(obj).forEach(key => {
     const newKey = prefix ? `${prefix}.${key}` : key;
     flattenJsonObject((obj as Record<string, unknown>)[key], newKey, result);
   });
-
   return result;
 }
 
-// Интерфейсы для типизации YML структур
-interface YmlCurrency {
-  $: { id: string; rate?: string };
-  id?: string;
-  rate?: string;
-}
-
-interface YmlCategory {
-  $: { id: string; parentId?: string };
-  _?: string;
-  id?: string;
-  name?: string;
-  parentId?: string;
-}
-
-interface YmlOffer {
-  $: { id: string; available?: string };
-  id?: string;
-  available?: string;
-  name?: string | string[];
-  url?: string | string[];
-  price?: string | string[];
-  currencyId?: string | string[];
-  categoryId?: string | string[];
-  vendor?: string | string[];
-  description?: string | string[];
-  oldprice?: string | string[];
-  vendorCode?: string | string[];
-  barcode?: string | string[];
-  sales_notes?: string | string[];
-  delivery?: string | string[];
-  pickup?: string | string[];
-  picture?: string | string[];
-  param?: Array<{ $: { name: string; unit?: string }; _?: string; name?: string; value?: string; unit?: string }>;
-}
-
-interface YmlShop {
-  name?: string | string[];
-  company?: string | string[];
-  url?: string | string[];
-  currencies?: Array<{ currency: YmlCurrency | YmlCurrency[] }>;
-  categories?: Array<{ category: YmlCategory | YmlCategory[] }>;
-  offers?: Array<{ offer: YmlOffer | YmlOffer[] }>;
-}
-
-interface YmlCatalog {
-  yml_catalog: {
-    $?: { date?: string };
-    date?: string;
-    shop: YmlShop | YmlShop[];
-  };
-}
-
-/**
- * Обработка YML файлов Яндекс Маркета
- * Преобразует XML структуру в удобный для анализа JSON формат
- */
-function processYandexMarketYml(parsed: YmlCatalog): Partial<JsonResult> {
+function processYandexMarketYml(parsed: any): Partial<JsonResult> {
   try {
     const catalog = parsed.yml_catalog;
     const shop = Array.isArray(catalog.shop) ? catalog.shop[0] : catalog.shop;
     
-    // Извлекаем основную информацию о магазине
     const shopInfo = {
-      name: shop.name?.[0] || shop.name || 'Unknown Shop',
-      company: shop.company?.[0] || shop.company || '',
-      url: shop.url?.[0] || shop.url || '',
-      date: catalog.$?.date || catalog.date || ''
+      name: shop.name || 'Unknown Shop',
+      company: shop.company || '',
+      url: shop.url || '',
+      date: catalog['@_date'] || catalog.date || ''
     };
     
-    // Обрабатываем валюты
     const currencies = [];
-    if (shop.currencies && shop.currencies[0] && shop.currencies[0].currency) {
-      const currencyList = Array.isArray(shop.currencies[0].currency) 
-        ? shop.currencies[0].currency 
-        : [shop.currencies[0].currency];
-      
-      currencies.push(...currencyList.map((curr: YmlCurrency) => ({
-        id: curr.$.id || curr.id,
-        rate: curr.$.rate || curr.rate || '1'
+    if (shop.currencies?.currency) {
+      const currencyList = Array.isArray(shop.currencies.currency) ? shop.currencies.currency : [shop.currencies.currency];
+      currencies.push(...currencyList.map((curr: any) => ({
+        id: curr['@_id'] || curr.id,
+        rate: curr['@_rate'] || curr.rate || '1'
       })));
     }
     
-    // Обрабатываем категории
     const categories = [];
-    if (shop.categories && shop.categories[0] && shop.categories[0].category) {
-      const categoryList = Array.isArray(shop.categories[0].category) 
-        ? shop.categories[0].category 
-        : [shop.categories[0].category];
-      
-      categories.push(...categoryList.map((cat: YmlCategory) => ({
-        id: cat.$.id || cat.id,
-        name: cat._ || cat.name || String(cat),
-        parentId: cat.$.parentId || cat.parentId || null
+    if (shop.categories?.category) {
+      const categoryList = Array.isArray(shop.categories.category) ? shop.categories.category : [shop.categories.category];
+      categories.push(...categoryList.map((cat: any) => ({
+        id: cat['@_id'] || cat.id,
+        name: cat['#text'] || cat.name || String(cat),
+        parentId: cat['@_parentId'] || cat.parentId || null
       })));
     }
     
-    // Обрабатываем товары (offers)
     const offers = [];
-    if (shop.offers && shop.offers[0] && shop.offers[0].offer) {
-      const offerList = Array.isArray(shop.offers[0].offer) 
-        ? shop.offers[0].offer 
-        : [shop.offers[0].offer];
-      
-      offers.push(...offerList.map((offer: YmlOffer) => {
+    if (shop.offers?.offer) {
+      const offerList = Array.isArray(shop.offers.offer) ? shop.offers.offer : [shop.offers.offer];
+      offers.push(...offerList.map((offer: any) => {
         const offerData: Record<string, unknown> = {
-          id: offer.$.id || offer.id,
-          available: offer.$.available || offer.available || 'true',
-          name: offer.name?.[0] || offer.name || '',
-          url: offer.url?.[0] || offer.url || '',
-          price: offer.price?.[0] || offer.price || '',
-          currencyId: offer.currencyId?.[0] || offer.currencyId || '',
-          categoryId: offer.categoryId?.[0] || offer.categoryId || '',
-          vendor: offer.vendor?.[0] || offer.vendor || '',
-          description: offer.description?.[0] || offer.description || ''
+          id: offer['@_id'] || offer.id,
+          available: offer['@_available'] || offer.available || 'true',
+          name: offer.name || '',
+          url: offer.url || '',
+          price: offer.price || '',
+          currencyId: offer.currencyId || '',
+          categoryId: offer.categoryId || '',
+          vendor: offer.vendor || '',
+          description: offer.description || ''
         };
         
-        // Добавляем опциональные поля
-        if (offer.oldprice) offerData.oldprice = offer.oldprice[0] || offer.oldprice;
-        if (offer.vendorCode) offerData.vendorCode = offer.vendorCode[0] || offer.vendorCode;
-        if (offer.barcode) offerData.barcode = offer.barcode[0] || offer.barcode;
-        if (offer.sales_notes) offerData.sales_notes = offer.sales_notes[0] || offer.sales_notes;
-        if (offer.delivery) offerData.delivery = offer.delivery[0] || offer.delivery;
-        if (offer.pickup) offerData.pickup = offer.pickup[0] || offer.pickup;
+        const optionalFields = ['oldprice', 'vendorCode', 'barcode', 'sales_notes', 'delivery', 'pickup'];
+        optionalFields.forEach(field => {
+            if (offer[field]) offerData[field] = offer[field];
+        });
         
-        // Обрабатываем картинки
         if (offer.picture) {
           const pictures = Array.isArray(offer.picture) ? offer.picture : [offer.picture];
           offerData.pictures = pictures.map((pic: string) => pic || '');
         }
         
-        // Обрабатываем параметры
         if (offer.param) {
           const params = Array.isArray(offer.param) ? offer.param : [offer.param];
-          offerData.parameters = params.map((param) => ({
-            name: param.$.name || param.name,
-            value: param._ || param.value || String(param),
-            unit: param.$.unit || param.unit || null
+          offerData.parameters = params.map((param: any) => ({
+            name: param['@_name'] || param.name,
+            value: param['#text'] || param.value || String(param),
+            unit: param['@_unit'] || param.unit || null
           }));
         }
-        
         return offerData;
       }));
     }
     
-    // Формируем итоговую структуру
     const result = {
       yandex_market_catalog: {
         shop_info: shopInfo,
@@ -365,8 +302,8 @@ function processYandexMarketYml(parsed: YmlCatalog): Partial<JsonResult> {
         statistics: {
           total_categories: categories.length,
           total_offers: offers.length,
-          available_offers: offers.filter(o => o.available === 'true' || o.available === true).length,
-          unavailable_offers: offers.filter(o => o.available === 'false' || o.available === false).length
+          available_offers: offers.filter((o: any) => o.available === 'true' || o.available === true).length,
+          unavailable_offers: offers.filter((o: any) => o.available === 'false' || o.available === false).length
         }
       }
     };
@@ -380,149 +317,95 @@ function processYandexMarketYml(parsed: YmlCatalog): Partial<JsonResult> {
   }
 }
 
-// Стратегии обработки форматов
-const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputFormat?: string }) => Promise<Partial<JsonResult>>> = {
+const strategies: Record<string, (buf: Buffer, ext?: string, options?: ProcessingOptions) => Promise<Partial<JsonResult>>> = {
   doc: async (buf) => {
     try {
       checkCFBFormat(buf, 'DOC (Word 97-2003)', 'DOCX (Word 2007+)');
       return { text: await extractViaOfficeParser(buf) };
     } catch (error) {
-      if (error instanceof UnsupportedFormatError) {
-        throw error;
-      }
-      
-      // Если это ошибка officeparser о CFB файлах, выдаем понятное сообщение
+      if (error instanceof UnsupportedFormatError) throw error;
       if (error instanceof Error && error.message.includes('cfb files')) {
         throw new UnsupportedFormatError(
           "Старые DOC файлы (Word 97-2003) не поддерживаются. " +
           "Пожалуйста, сохраните файл в формате DOCX (Word 2007+) и попробуйте снова."
         );
       }
-      
       throw new ProcessingError(`DOC processing error: ${error instanceof Error ? error.message : String(error)}`);
     }
   },
   docx: async (buf, _ext, options) => {
     const outputFormat = options?.outputFormat || 'text';
-    
-    // Если запрошен HTML формат - используем mammoth.convertToHtml
+    const metadata = await getOfficeMetadata(buf);
+
     if (outputFormat === 'html') {
       try {
         const result = await mammoth.convertToHtml({ buffer: buf });
         if (result.value && result.value.trim().length > 0) {
-          return { text: result.value };
+          return { text: result.value, metadata };
         }
-        // Если вернул пустую строку - пробуем fallback
-      } catch {
-        // Ошибка mammoth HTML - пробуем fallback
-      }
+      } catch {}
     }
-    
-    // Plain text режим (по умолчанию) или fallback для HTML
-    
-    // Попытка 1: officeparser
     try {
       const text = await extractViaOfficeParser(buf);
-      if (text && text.trim().length > 0) {
-        return { text };
-      }
-      // Если вернул пустую строку - пробуем дальше
-    } catch {
-      // Ошибка officeparser - пробуем дальше
-    }
-    
-    // Попытка 2: mammoth (text)
+      if (text && text.trim().length > 0) return { text, metadata };
+    } catch {}
     try {
       const result = await mammoth.extractRawText({ buffer: buf });
-      if (result.value && result.value.trim().length > 0) {
-        return { text: result.value };
-      }
-      // Если вернул пустую строку - пробуем дальше
-    } catch {
-      // Ошибка mammoth - пробуем дальше
-    }
+      if (result.value && result.value.trim().length > 0) return { text: result.value, metadata };
+    } catch {}
     
-    // Попытка 3: Прямой парсинг XML из ZIP (для ONLYOFFICE и других нестандартных DOCX)
+    // Custom XML parsing
     try {
       const zip = await JSZip.loadAsync(buf);
       const documentXml = await zip.file('word/document.xml')?.async('text');
-      
       if (documentXml) {
-        // Парсим XML и извлекаем текст из <w:t> тегов
-        const parsed = await parseStringPromise(documentXml);
+        const parser = new XMLParser({ ignoreAttributes: false });
+        const parsed = parser.parse(documentXml);
         const textParts: string[] = [];
         
-        // Рекурсивная функция для поиска текстовых узлов (w:t и a:t для DrawingML)
-        const extractText = (obj: unknown, isInsideTextNode = false): void => {
-          if (!obj) return;
-          
-          // Если мы внутри текстового тега, извлекаем только строки
-          if (isInsideTextNode && typeof obj === 'string') {
-            textParts.push(obj);
-            return;
-          }
-          
-          if (Array.isArray(obj)) {
-            obj.forEach(item => extractText(item, isInsideTextNode));
-            return;
-          }
-          
-          if (typeof obj === 'object') {
-            const objRecord = obj as Record<string, unknown>;
-            
-            // Если нашли w:t (обычный текст) или a:t (DrawingML текст - фигуры, textbox)
-            if (objRecord['w:t'] || objRecord['a:t']) {
-              const textNode = objRecord['w:t'] || objRecord['a:t'];
-              extractText(textNode, true); // Флаг: мы внутри текстового узла
-              return; // НЕ обходим остальные свойства этого объекта
+        const extractText = (obj: any) => {
+            if (!obj) return;
+            if (typeof obj === 'string') return;
+            if (Array.isArray(obj)) {
+                obj.forEach(item => extractText(item));
+                return;
             }
-            
-            // Продолжаем поиск текстовых тегов в дочерних элементах
-            for (const key of Object.keys(objRecord)) {
-              // Обходим Word элементы (w:*) и DrawingML элементы (a:*, wp:*, pic:*, wps:*)
-              // Игнорируем атрибуты (начинаются с $) и metadata (rsid*)
-              if ((key.startsWith('w:') || key.startsWith('a:') || key.startsWith('wp:') || key.startsWith('pic:') || key.startsWith('wps:')) 
-                  && key !== 'w:rsidR' && key !== 'w:rsidRPr' && !key.startsWith('$')) {
-                extractText(objRecord[key], false);
-              }
+            if (typeof obj === 'object') {
+                if (obj['w:t'] || obj['a:t']) {
+                    const t = obj['w:t'] || obj['a:t'];
+                    if (typeof t === 'string') textParts.push(t);
+                    else if (t['#text']) textParts.push(t['#text']);
+                    return;
+                }
+                Object.keys(obj).forEach(key => {
+                    if ((key.startsWith('w:') || key.startsWith('a:') || key.startsWith('wp:') || key.startsWith('pic:') || key.startsWith('wps:')) 
+                        && !key.startsWith('w:rsid') && !key.startsWith('@_')) {
+                        extractText(obj[key]);
+                    }
+                });
             }
-          }
         };
-        
         extractText(parsed);
         const extractedText = textParts.join(' ').trim();
-        
-        if (extractedText.length > 0) {
-          return { text: extractedText };
-        }
+        if (extractedText.length > 0) return { text: extractedText, metadata };
       }
-    } catch {
-      // Даже прямой парсинг не помог
-      throw new ProcessingError(
-        `DOCX processing error: All parsers failed. ` +
-        `This may be a corrupted, password-protected, or non-standard DOCX file. ` +
-        `Try opening and re-saving in Microsoft Word or LibreOffice.`
-      );
-    }
+    } catch {}
     
-    // Если все три попытки вернули пустой текст
-    return { text: '' };
+    return { text: '', metadata };
   },
   xml: async (buf) => {
-    const parsed = await parseStringPromise(buf.toString("utf8"));
+    const parser = new XMLParser({ ignoreAttributes: false });
+    const parsed = parser.parse(buf.toString("utf8"));
     return { text: JSON.stringify(parsed, null, 2) };
   },
   yml: async (buf) => {
     try {
       const xmlContent = buf.toString("utf8");
-      const parsed = await parseStringPromise(xmlContent);
-      
-      // Проверяем, является ли это YML файлом Яндекс Маркета
+      const parser = new XMLParser({ ignoreAttributes: false });
+      const parsed = parser.parse(xmlContent);
       if (parsed.yml_catalog && parsed.yml_catalog.shop) {
         return processYandexMarketYml(parsed);
       }
-      
-      // Если это обычный YML/XML, обрабатываем как XML
       return { text: JSON.stringify(parsed, null, 2) };
     } catch (error) {
       throw new ProcessingError(`YML processing error: ${error instanceof Error ? error.message : String(error)}`);
@@ -530,11 +413,9 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
   },
   json: async (buf) => {
     try {
-      const encoding = chardet.detect(buf) || "utf-8";
+      const encoding = jschardet.detect(buf).encoding || "utf-8";
       const jsonString = iconv.decode(buf, encoding);
       const parsed = JSON.parse(jsonString);
-      
-      // Если это простой объект, нормализуем его
       if (typeof parsed === 'object' && parsed !== null) {
         const flattened = flattenJsonObject(parsed);
         return { 
@@ -543,8 +424,6 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
             "Многоуровневая структура JSON была преобразована в плоский объект" : undefined
         };
       }
-      
-      // Если это массив или примитив, возвращаем как есть
       return { text: JSON.stringify(parsed, null, 2) };
     } catch (error) {
       throw new ProcessingError(`JSON parsing error: ${error instanceof Error ? error.message : String(error)}`);
@@ -553,60 +432,62 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
   odt: async (buf) => processViaOfficeParser(buf, 'ODT'),
   odp: async (buf) => processViaOfficeParser(buf, 'ODP'),
   ods: async (buf) => processViaOfficeParser(buf, 'ODS'),
-
-  xlsx: async (buf) => {
-    // Используем ExcelJS напрямую для полной поддержки структуры Excel
+  xlsx: async (buf, _ext, options) => {
     const workbook = new ExcelJS.Workbook();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await workbook.xlsx.load(buf as any);
     const sheets: Record<string, unknown[]> = {};
+    const maxRows = options?.maxExcelRows || 0;
+    
+    const metadata: Record<string, unknown> = {};
+    if (workbook.creator) metadata.author = workbook.creator;
+    if (workbook.lastModifiedBy) metadata.lastModifiedBy = workbook.lastModifiedBy;
+    if (workbook.created) metadata.created = workbook.created;
+    if (workbook.modified) metadata.modified = workbook.modified;
+
     workbook.eachSheet((worksheet) => {
       const sheetName = worksheet.name;
       const jsonData: unknown[] = [];
       worksheet.eachRow((row) => {
         const rowData: Record<string, unknown> = {};
         row.eachCell((cell, colNumber) => {
-          const columnLetter = numberToColumn(colNumber - 1);
+          const columnLetter = numberToColumn(colNumber);
           rowData[columnLetter] = cell.value;
         });
         if (Object.keys(rowData).length > 0) {
           jsonData.push(rowData);
         }
       });
-      sheets[sheetName] = limitExcelSheet(jsonData);
+      sheets[sheetName] = limitExcelSheet(jsonData, maxRows);
     });
-    return { sheets };
+    return { sheets, metadata };
   },
-  csv: async (buf) => {
-    const encoding = chardet.detect(buf) || "utf-8";
+  csv: async (buf, _ext, options) => {
+    const encoding = jschardet.detect(buf).encoding || "utf-8";
     const decoded = iconv.decode(buf, encoding);
     if (buf.length > CSV_STREAM_SIZE_LIMIT) {
-      return streamCsvStrategy(decoded);
+      return streamCsvStrategy(decoded, options?.csvDelimiter);
     }
-    return processExcel(decoded, "csv");
+    return processExcel(decoded, "csv", options?.csvDelimiter);
   },
   pdf: async (buf) => {
-    // Используем officeparser вместо pdf-parse (officeparser использует pdf.js с 2024/05/06)
     try {
-      return { text: await extractViaOfficeParser(buf) };
+      const text = await extractViaOfficeParser(buf);
+      const warning = (text.trim().length < 100 && buf.length > 50 * 1024) 
+        ? "Предупреждение: Файл PDF большой, но текста найдено мало. Возможно, это скан-копия (изображение), требующая OCR." 
+        : undefined;
+      return { text, warning };
     } catch (error) {
-      // Fallback на pdf-parse если officeparser не справился
-      try {
-        const data = await pdfParse(buf);
-        return { text: data.text };
-      } catch (fallbackError) {
         throw new ProcessingError(
-          `PDF processing error: Primary parser failed (${error instanceof Error ? error.message : String(error)}), ` +
-          `Fallback parser failed (${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)})`
+          `PDF processing error: ${error instanceof Error ? error.message : String(error)}`
         );
-      }
     }
   },
   txt: async (buf) => {
     if (buf.length > TXT_STREAM_SIZE_LIMIT) {
       return streamTxtStrategy(buf);
     }
-    const encoding = chardet.detect(buf) || "utf-8";
+    const encoding = jschardet.detect(buf).encoding || "utf-8";
     return { text: iconv.decode(buf, encoding) };
   },
   ppt: async (buf) => {
@@ -614,34 +495,34 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
       checkCFBFormat(buf, 'PPT (PowerPoint 97-2003)', 'PPTX (PowerPoint 2007+)');
       return { text: await extractViaOfficeParser(buf) };
     } catch (error) {
-      if (error instanceof UnsupportedFormatError) {
-        throw error;
-      }
-      
-      // Если это ошибка officeparser о CFB файлах, выдаем понятное сообщение
+      if (error instanceof UnsupportedFormatError) throw error;
       if (error instanceof Error && error.message.includes('cfb files')) {
         throw new UnsupportedFormatError(
           "Старые PPT файлы (PowerPoint 97-2003) не поддерживаются. " +
           "Пожалуйста, сохраните файл в формате PPTX (PowerPoint 2007+) и попробуйте снова."
         );
       }
-      
       throw new ProcessingError(`PPT processing error: ${error instanceof Error ? error.message : String(error)}`);
     }
   },
-  pptx: async (buf) => processViaOfficeParser(buf, 'PPTX'),
-  html: async (buf) => processHtml(buf),
-  htm: async (buf) => processHtml(buf),
+  pptx: async (buf) => {
+      const metadata = await getOfficeMetadata(buf);
+      const res = await processViaOfficeParser(buf, 'PPTX');
+      return { ...res, metadata };
+  },
+  html: async (buf, _ext, options) => processHtml(buf, options?.preserveTables),
+  htm: async (buf, _ext, options) => processHtml(buf, options?.preserveTables),
 };
 
-async function streamCsvStrategy(data: string): Promise<Partial<JsonResult>> {
+async function streamCsvStrategy(data: string, delimiter?: string): Promise<Partial<JsonResult>> {
   return new Promise((resolve, reject) => {
     const rows: unknown[] = [];
     let rowCount = 0;
-    Papa.parse(data, {
+    
+    const config = {
       header: true,
       skipEmptyLines: true,
-      step: (result) => {
+      step: (result: any) => {
         if (rowCount < CSV_STREAM_ROW_LIMIT) {
           rows.push(result.data);
           rowCount++;
@@ -656,23 +537,28 @@ async function streamCsvStrategy(data: string): Promise<Partial<JsonResult>> {
           warning,
         });
       },
-      error: (err: Error) => reject(err),
-    });
+      error: (err: any) => reject(err),
+    } as Papa.ParseConfig;
+    
+    if (delimiter && delimiter !== 'auto') {
+        config.delimiter = delimiter;
+    }
+
+    Papa.parse(data, config);
   });
 }
 
-async function processExcel(data: Buffer | string, ext: string): Promise<Partial<JsonResult>> {
+async function processExcel(data: Buffer | string, ext: string, csvDelimiter?: string): Promise<Partial<JsonResult>> {
   const workbook = new ExcelJS.Workbook();
-  
   if (ext === "csv") {
-    // Для CSV используем Papa Parse (уже реализовано в streamCsvStrategy)
-    return streamCsvStrategy(data as string);
+    // If CSV, pass to stream strategy but need to ensure it doesn't loop if called from strategies.csv
+    // Actually strategies.csv calls this if small file.
+    // We can just use PapaParse directly here for small CSVs too to respect delimiter.
+    return streamCsvStrategy(data as string, csvDelimiter);
   } else {
-    // Для Excel файлов загружаем через ExcelJS
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await workbook.xlsx.load(data as any);
   }
-  
   const sheets: Record<string, unknown[]> = {};
   workbook.eachSheet((worksheet) => {
     const sheetName = worksheet.name;
@@ -687,29 +573,38 @@ async function processExcel(data: Buffer | string, ext: string): Promise<Partial
         jsonData.push(rowData);
       }
     });
-    sheets[sheetName] = limitExcelSheet(jsonData);
+    sheets[sheetName] = jsonData;
   });
   return { sheets };
 }
 
-/**
- * Обработка HTML/HTM файлов
- */
-async function processHtml(buf: Buffer): Promise<Partial<JsonResult>> {
+async function processHtml(buf: Buffer, preserveTables: boolean = false): Promise<Partial<JsonResult>> {
   try {
-    const $ = cheerio.load(buf.toString("utf8"));
-    const rawText = $("body").text().replace(/\s+/g, " ").trim();
-    const cleanText = sanitizeHtml(rawText, { allowedTags: [], allowedAttributes: {} });
+    const root = parseHtml(buf.toString("utf8"));
+    
+    let cleanText: string;
+    
+    if (preserveTables) {
+        // Allow tables and basic formatting
+        cleanText = sanitizeHtml(root.toString(), { 
+            allowedTags: ['table', 'tbody', 'thead', 'tr', 'td', 'th', 'caption', 'p', 'br', 'b', 'i', 'strong', 'em', 'ul', 'ol', 'li'], 
+            allowedAttributes: {
+                'td': ['colspan', 'rowspan'],
+                'th': ['colspan', 'rowspan']
+            }
+        });
+    } else {
+        // Strip all tags, pure text
+        const rawText = root.text.replace(/\s+/g, " ").trim();
+        cleanText = sanitizeHtml(rawText, { allowedTags: [], allowedAttributes: {} });
+    }
+    
     return { text: cleanText };
   } catch (error) {
     throw new ProcessingError(`HTML processing error: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-/**
- * Custom n8n node: convert files to JSON/text
- * Supports DOCX, XML, YML, XLSX, CSV, PDF, TXT, PPTX, HTML
- */
 export class FileToJsonNode implements INodeType {
   description: INodeTypeDescription = {
     displayName: "Document Converter",
@@ -753,6 +648,27 @@ export class FileToJsonNode implements INodeType {
         }
       },
       {
+        displayName: "Max Excel Rows",
+        name: "maxExcelRows",
+        type: "number",
+        default: 0,
+        description: "Maximum number of rows to extract from Excel sheets (0 = unlimited). Useful to prevent out-of-memory errors on large files.",
+      },
+      {
+        displayName: "CSV Delimiter",
+        name: "csvDelimiter",
+        type: "options",
+        options: [
+            { name: "Auto Detect", value: "auto" },
+            { name: "Comma (,)", value: "," },
+            { name: "Semicolon (;)", value: ";" },
+            { name: "Tab", value: "\t" },
+            { name: "Pipe (|)", value: "|" },
+        ],
+        default: "auto",
+        description: "Delimiter to use for CSV files",
+      },
+      {
         displayName: "Output Format (DOCX)",
         name: "outputFormat",
         type: "options",
@@ -769,38 +685,39 @@ export class FileToJsonNode implements INodeType {
           },
         ],
         default: "text",
-        description: "Choose output format for DOCX files. HTML format preserves tables and formatting, making it better for AI/LLM processing.",
+        description: "Choose output format for DOCX files",
+      },
+      {
+        displayName: "Preserve Tables (HTML)",
+        name: "preserveTables",
+        type: "boolean",
+        default: true,
+        description: "Whether to preserve HTML tables in the output (useful for RAG/LLM context)",
+        displayOptions: {
+            show: {
+                outputFormat: ["html"]
+            }
+        }
       },
     ],
   };
 
-  /**
-   * Main execution method for n8n node
-   */
   async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
     const items = this.getInputData();
     const supported = [
-      "doc",
-      "docx",
-      "xml",
-      "xlsx",
-      "csv",
-      "pdf",
-      "txt",
-      "pptx",
-      "html",
-      "htm",
-      "odt",
-      "odp",
-      "ods",
-      "json",
+      "doc", "docx", "xml", "xlsx", "csv", "pdf", "txt",
+      "pptx", "html", "htm", "odt", "odp", "ods", "json", "yml"
     ];
-    const maxFileSize = (this.getNodeParameter('maxFileSize', 0, 50) as number) * 1024 * 1024; // MB в байты
+    const maxFileSize = (this.getNodeParameter('maxFileSize', 0, 50) as number) * 1024 * 1024;
     const maxConcurrency = this.getNodeParameter('maxConcurrency', 0, 4) as number;
-
+    
     const processItem = async (item: unknown, i: number): Promise<INodeExecutionData> => {
       const prop = this.getNodeParameter("binaryPropertyName", i, "data");
-              // --- Input data validation ---
+      const maxExcelRows = this.getNodeParameter('maxExcelRows', i, 0) as number;
+      const csvDelimiter = this.getNodeParameter('csvDelimiter', i, 'auto') as string;
+      const outputFormat = this.getNodeParameter('outputFormat', i, 'text') as string;
+      const preserveTables = this.getNodeParameter('preserveTables', i, true) as boolean;
+      
       if (!item || typeof item !== "object")
         throw new FileTypeError(`Item #${i} is not an object`);
       
@@ -821,105 +738,65 @@ export class FileToJsonNode implements INodeType {
         throw new EmptyFileError("File is empty or contains no data");
       if (buf.length > maxFileSize)
         throw new FileTooLargeError(`File is too large (maximum ${maxFileSize / 1024 / 1024} MB)`);
-              // --- End of validation ---
+
       const name = sanitizeFileName(binaryProp.fileName ?? "");
       let ext = path.extname(name).slice(1).toLowerCase();
 
-      /* ── autodetect ── */
       if (!ext || !supported.includes(ext)) {
         try {
-          const ft = await fileTypeFromBuffer(buf);
+          const ft = await fileType.fromBuffer(buf);
           if (ft?.ext && supported.includes(ft.ext)) {
             ext = ft.ext;
           } else {
             throw new UnsupportedFormatError(`Unsupported file type: ${ext || "unknown"}`);
           }
         } catch (error) {
-          this.logger?.warn('File type detection failed', { 
-            fileName: name, 
-            error: error instanceof Error ? error.message : String(error) 
-          });
+          this.logger?.warn('File type detection failed', { fileName: name });
           throw new UnsupportedFormatError(`Unsupported file type: ${ext || "unknown"}`);
         }
       }
 
-      this.logger?.info("ConvertFileToJSON →", {
-        file: name || "[no-name]",
-        ext,
-        size: buf.length,
-      });
-
       let json: Partial<JsonResult> = {};
-      const startTime = performance.now();
       
-      // Получаем outputFormat для DOCX файлов
-      const outputFormat = this.getNodeParameter('outputFormat', i, 'text') as string;
-      
-      try {
-        if (!strategies[ext]) {
-          throw new UnsupportedFormatError(`Format "${ext}" is not supported`);
-        }
-        // Передаем outputFormat только для DOCX
-        json = await strategies[ext](buf, ext, ext === 'docx' ? { outputFormat } : undefined);
-      } catch (e) {
-        // Пробрасываем специализированные ошибки как есть
-        if (e instanceof FileTypeError || 
-            e instanceof FileTooLargeError ||
-            e instanceof UnsupportedFormatError ||
-            e instanceof EmptyFileError ||
-            e instanceof ProcessingError) {
-          throw e;
-        }
-        // Оборачиваем только неизвестные ошибки
-        throw new ProcessingError(`${ext.toUpperCase()} processing error: ${(e as Error).message}`);
+      if (!strategies[ext]) {
+        throw new UnsupportedFormatError(`Format "${ext}" is not supported`);
       }
       
-      const processingTime = performance.now() - startTime;
-      this.logger?.info('Processing completed', { 
-        file: name, 
-        size: buf.length, 
-        time: `${processingTime.toFixed(2)}ms`,
-        type: ext
+      json = await strategies[ext](buf, ext, { 
+        outputFormat, 
+        maxExcelRows, 
+        csvDelimiter,
+        preserveTables 
       });
-
-      if (
-        "text" in json &&
-        (!(json as JsonTextResult).text || (json as JsonTextResult).text.trim().length === 0)
-      ) {
-        throw new EmptyFileError(
-          `File "${name}" (${ext.toUpperCase()}, ${(buf.length / 1024).toFixed(2)} KB) contains no extractable text. ` +
-          `Possible reasons: (1) File contains only images/graphics without text, ` +
-          `(2) File is password-protected or encrypted, ` +
-          `(3) File structure is corrupted, ` +
-          `(4) File was created with a non-standard application. ` +
-          `Try: Open file in original application and verify it contains text, then save it again.`
-        );
-      }
-
-      json.metadata = {
-        fileName: sanitizeFileName(name) || null,
-        fileSize: buf.length,
-        fileType: ext,
-        processedAt: new Date().toISOString(),
-      };
 
       return {
-        json: json as INodeExecutionData['json'],
-        pairedItem: { item: i },
+        json: {
+          fileName: name,
+          fileType: ext,
+          ...json,
+        },
       };
     };
 
     const results = await promisePool(items, processItem, maxConcurrency);
     
-    // Объединяем все результаты в один item
-    return [[{
-      json: {
-        files: results.map(result => result.json),
-        totalFiles: results.length,
-        processedAt: new Date().toISOString()
+    const executionData: INodeExecutionData[] = [];
+    const errors: Error[] = [];
+
+    results.forEach((res, index) => {
+      if (res.status === 'fulfilled' && res.value) {
+        executionData.push(res.value);
+      } else {
+        const error = res.reason;
+        this.logger?.error(`Error processing item ${index}`, { error });
+        errors.push(error instanceof Error ? error : new Error(String(error)));
       }
-    }]];
+    });
+
+    if (executionData.length === 0 && errors.length > 0) {
+        throw errors[0];
+    }
+
+    return [executionData];
   }
 }
-
-// Export уже выполнен в объявлении класса
