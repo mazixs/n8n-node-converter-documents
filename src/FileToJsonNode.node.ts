@@ -7,13 +7,12 @@
  * Выход: { text: "..."} либо { sheets: {...} } + metadata.
  */
 
-import { parseStringPromise } from "xml2js";
+import { XMLParser } from "fast-xml-parser";
 import mammoth from "mammoth";
 import * as ExcelJS from "exceljs";
-import pdfParse from "pdf-parse";
-import * as cheerio from "cheerio";
-import { fileTypeFromBuffer } from "file-type";
-import chardet from "chardet";
+import { parse as parseHtml } from "node-html-parser";
+import { fromBuffer as fileTypeFromBuffer } from "file-type";
+import jschardet from "jschardet";
 import iconv from "iconv-lite";
 import path from "path";
 import { extractViaOfficeParser, limitExcelSheet } from "./helpers";
@@ -65,9 +64,10 @@ function sanitizeFileName(fileName: string): string {
     throw new FileTypeError('Invalid file name: contains path traversal characters');
   }
   
-  // Удаляем опасные символы - создаем control characters regex программно
+  // Удаляем опасные символы
   const dangerousChars = /[<>:"|?*]/g;
-  const controlChars = new RegExp('[' + String.fromCharCode(0) + '-' + String.fromCharCode(31) + String.fromCharCode(127) + '-' + String.fromCharCode(159) + ']', 'g');
+  // eslint-disable-next-line no-control-regex
+  const controlChars = /[\x00-\x1f\x7f-\x9f]/g;
   const sanitized = fileName.replace(dangerousChars, '_').replace(controlChars, '_');
   
   // Ограничиваем длину
@@ -182,21 +182,24 @@ function flattenJsonObject(obj: unknown, prefix: string = '', result: Record<str
 
 // Интерфейсы для типизации YML структур
 interface YmlCurrency {
-  $: { id: string; rate?: string };
+  "@_id"?: string;
+  "@_rate"?: string;
   id?: string;
   rate?: string;
 }
 
 interface YmlCategory {
-  $: { id: string; parentId?: string };
-  _?: string;
+  "@_id"?: string;
+  "@_parentId"?: string;
+  "#text"?: string;
   id?: string;
   name?: string;
   parentId?: string;
 }
 
 interface YmlOffer {
-  $: { id: string; available?: string };
+  "@_id"?: string;
+  "@_available"?: string;
   id?: string;
   available?: string;
   name?: string | string[];
@@ -213,24 +216,35 @@ interface YmlOffer {
   delivery?: string | string[];
   pickup?: string | string[];
   picture?: string | string[];
-  param?: Array<{ $: { name: string; unit?: string }; _?: string; name?: string; value?: string; unit?: string }>;
+  param?: Array<{ "@_name": string; "@_unit"?: string; "#text"?: string; name?: string; value?: string; unit?: string }>;
 }
 
 interface YmlShop {
   name?: string | string[];
   company?: string | string[];
   url?: string | string[];
-  currencies?: Array<{ currency: YmlCurrency | YmlCurrency[] }>;
-  categories?: Array<{ category: YmlCategory | YmlCategory[] }>;
-  offers?: Array<{ offer: YmlOffer | YmlOffer[] }>;
+  currencies?: { currency: YmlCurrency | YmlCurrency[] };
+  categories?: { category: YmlCategory | YmlCategory[] };
+  offers?: { offer: YmlOffer | YmlOffer[] };
 }
 
 interface YmlCatalog {
   yml_catalog: {
-    $?: { date?: string };
+    "@_date"?: string;
     date?: string;
-    shop: YmlShop | YmlShop[];
+    shop: YmlShop;
   };
+}
+
+// Helper helper to safely get value from array or single item
+function _getFirst<T>(val: T | T[]): T | undefined {
+  if (Array.isArray(val)) return val[0];
+  return val;
+}
+
+function getVal<T>(val: T | T[] | undefined): T | undefined {
+    if (val === undefined) return undefined;
+    return Array.isArray(val) ? val[0] : val;
 }
 
 /**
@@ -240,70 +254,70 @@ interface YmlCatalog {
 function processYandexMarketYml(parsed: YmlCatalog): Partial<JsonResult> {
   try {
     const catalog = parsed.yml_catalog;
-    const shop = Array.isArray(catalog.shop) ? catalog.shop[0] : catalog.shop;
+    const shop = catalog.shop;
     
     // Извлекаем основную информацию о магазине
     const shopInfo = {
-      name: shop.name?.[0] || shop.name || 'Unknown Shop',
-      company: shop.company?.[0] || shop.company || '',
-      url: shop.url?.[0] || shop.url || '',
-      date: catalog.$?.date || catalog.date || ''
+      name: getVal(shop.name) || 'Unknown Shop',
+      company: getVal(shop.company) || '',
+      url: getVal(shop.url) || '',
+      date: catalog["@_date"] || catalog.date || ''
     };
     
     // Обрабатываем валюты
-    const currencies = [];
-    if (shop.currencies && shop.currencies[0] && shop.currencies[0].currency) {
-      const currencyList = Array.isArray(shop.currencies[0].currency) 
-        ? shop.currencies[0].currency 
-        : [shop.currencies[0].currency];
+    const currencies: unknown[] = [];
+    if (shop.currencies && shop.currencies.currency) {
+      const currencyList = Array.isArray(shop.currencies.currency) 
+        ? shop.currencies.currency 
+        : [shop.currencies.currency];
       
       currencies.push(...currencyList.map((curr: YmlCurrency) => ({
-        id: curr.$.id || curr.id,
-        rate: curr.$.rate || curr.rate || '1'
+        id: curr["@_id"] || curr.id,
+        rate: curr["@_rate"] || curr.rate || '1'
       })));
     }
     
     // Обрабатываем категории
-    const categories = [];
-    if (shop.categories && shop.categories[0] && shop.categories[0].category) {
-      const categoryList = Array.isArray(shop.categories[0].category) 
-        ? shop.categories[0].category 
-        : [shop.categories[0].category];
+    const categories: unknown[] = [];
+    if (shop.categories && shop.categories.category) {
+      const categoryList = Array.isArray(shop.categories.category) 
+        ? shop.categories.category 
+        : [shop.categories.category];
       
       categories.push(...categoryList.map((cat: YmlCategory) => ({
-        id: cat.$.id || cat.id,
-        name: cat._ || cat.name || String(cat),
-        parentId: cat.$.parentId || cat.parentId || null
+        id: cat["@_id"] || cat.id,
+        name: cat["#text"] || cat.name || String(cat),
+        parentId: cat["@_parentId"] || cat.parentId || null
       })));
     }
     
     // Обрабатываем товары (offers)
-    const offers = [];
-    if (shop.offers && shop.offers[0] && shop.offers[0].offer) {
-      const offerList = Array.isArray(shop.offers[0].offer) 
-        ? shop.offers[0].offer 
-        : [shop.offers[0].offer];
+    const offers: unknown[] = [];
+    if (shop.offers && shop.offers.offer) {
+      const offerList = Array.isArray(shop.offers.offer) 
+        ? shop.offers.offer 
+        : [shop.offers.offer];
       
       offers.push(...offerList.map((offer: YmlOffer) => {
         const offerData: Record<string, unknown> = {
-          id: offer.$.id || offer.id,
-          available: offer.$.available || offer.available || 'true',
-          name: offer.name?.[0] || offer.name || '',
-          url: offer.url?.[0] || offer.url || '',
-          price: offer.price?.[0] || offer.price || '',
-          currencyId: offer.currencyId?.[0] || offer.currencyId || '',
-          categoryId: offer.categoryId?.[0] || offer.categoryId || '',
-          vendor: offer.vendor?.[0] || offer.vendor || '',
-          description: offer.description?.[0] || offer.description || ''
+          id: offer["@_id"] || offer.id,
+          available: offer["@_available"] || offer.available || 'true',
+          name: getVal(offer.name) || '',
+          url: getVal(offer.url) || '',
+          price: getVal(offer.price) || '',
+          currencyId: getVal(offer.currencyId) || '',
+          categoryId: getVal(offer.categoryId) || '',
+          vendor: getVal(offer.vendor) || '',
+          description: getVal(offer.description) || ''
         };
         
         // Добавляем опциональные поля
-        if (offer.oldprice) offerData.oldprice = offer.oldprice[0] || offer.oldprice;
-        if (offer.vendorCode) offerData.vendorCode = offer.vendorCode[0] || offer.vendorCode;
-        if (offer.barcode) offerData.barcode = offer.barcode[0] || offer.barcode;
-        if (offer.sales_notes) offerData.sales_notes = offer.sales_notes[0] || offer.sales_notes;
-        if (offer.delivery) offerData.delivery = offer.delivery[0] || offer.delivery;
-        if (offer.pickup) offerData.pickup = offer.pickup[0] || offer.pickup;
+        if (offer.oldprice) offerData.oldprice = getVal(offer.oldprice);
+        if (offer.vendorCode) offerData.vendorCode = getVal(offer.vendorCode);
+        if (offer.barcode) offerData.barcode = getVal(offer.barcode);
+        if (offer.sales_notes) offerData.sales_notes = getVal(offer.sales_notes);
+        if (offer.delivery) offerData.delivery = getVal(offer.delivery);
+        if (offer.pickup) offerData.pickup = getVal(offer.pickup);
         
         // Обрабатываем картинки
         if (offer.picture) {
@@ -315,9 +329,9 @@ function processYandexMarketYml(parsed: YmlCatalog): Partial<JsonResult> {
         if (offer.param) {
           const params = Array.isArray(offer.param) ? offer.param : [offer.param];
           offerData.parameters = params.map((param) => ({
-            name: param.$.name || param.name,
-            value: param._ || param.value || String(param),
-            unit: param.$.unit || param.unit || null
+            name: param["@_name"] || param.name,
+            value: param["#text"] || param.value || String(param),
+            unit: param["@_unit"] || param.unit || null
           }));
         }
         
@@ -335,8 +349,8 @@ function processYandexMarketYml(parsed: YmlCatalog): Partial<JsonResult> {
         statistics: {
           total_categories: categories.length,
           total_offers: offers.length,
-          available_offers: offers.filter(o => o.available === 'true' || o.available === true).length,
-          unavailable_offers: offers.filter(o => o.available === 'false' || o.available === false).length
+          available_offers: offers.filter((o) => (o as Record<string, unknown>).available === 'true' || (o as Record<string, unknown>).available === true).length,
+          unavailable_offers: offers.filter((o) => (o as Record<string, unknown>).available === 'false' || (o as Record<string, unknown>).available === false).length
         }
       }
     };
@@ -371,7 +385,6 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
         throw error;
       }
       
-      // Если это ошибка officeparser о CFB файлах, выдаем понятное сообщение
       if (error instanceof Error && error.message.includes('cfb files')) {
         throw new UnsupportedFormatError(
           "Старые DOC файлы (Word 97-2003) не поддерживаются. " +
@@ -392,7 +405,6 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
         if (result.value && result.value.trim().length > 0) {
           return { text: result.value };
         }
-        // Если вернул пустую строку - пробуем fallback
       } catch {
         // Ошибка mammoth HTML - пробуем fallback
       }
@@ -406,7 +418,6 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
       if (text && text.trim().length > 0) {
         return { text };
       }
-      // Если вернул пустую строку - пробуем дальше
     } catch {
       // Ошибка officeparser - пробуем дальше
     }
@@ -417,26 +428,23 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
       if (result.value && result.value.trim().length > 0) {
         return { text: result.value };
       }
-      // Если вернул пустую строку - пробуем дальше
     } catch {
       // Ошибка mammoth - пробуем дальше
     }
     
-    // Попытка 3: Прямой парсинг XML из ZIP (для ONLYOFFICE и других нестандартных DOCX)
+    // Попытка 3: Прямой парсинг XML из ZIP
     try {
       const zip = await JSZip.loadAsync(buf);
       const documentXml = await zip.file('word/document.xml')?.async('text');
       
       if (documentXml) {
-        // Парсим XML и извлекаем текст из <w:t> тегов
-        const parsed = await parseStringPromise(documentXml);
+        const parser = new XMLParser({ ignoreAttributes: false });
+        const parsed = parser.parse(documentXml);
         const textParts: string[] = [];
         
-        // Рекурсивная функция для поиска текстовых узлов (w:t и a:t для DrawingML)
         const extractText = (obj: unknown, isInsideTextNode = false): void => {
           if (!obj) return;
           
-          // Если мы внутри текстового тега, извлекаем только строки
           if (isInsideTextNode && typeof obj === 'string') {
             textParts.push(obj);
             return;
@@ -450,17 +458,13 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
           if (typeof obj === 'object') {
             const objRecord = obj as Record<string, unknown>;
             
-            // Если нашли w:t (обычный текст) или a:t (DrawingML текст - фигуры, textbox)
             if (objRecord['w:t'] || objRecord['a:t']) {
               const textNode = objRecord['w:t'] || objRecord['a:t'];
-              extractText(textNode, true); // Флаг: мы внутри текстового узла
-              return; // НЕ обходим остальные свойства этого объекта
+              extractText(textNode, true); 
+              return; 
             }
             
-            // Продолжаем поиск текстовых тегов в дочерних элементах
             for (const key of Object.keys(objRecord)) {
-              // Обходим Word элементы (w:*) и DrawingML элементы (a:*, wp:*, pic:*, wps:*)
-              // Игнорируем атрибуты (начинаются с $) и metadata (rsid*)
               if ((key.startsWith('w:') || key.startsWith('a:') || key.startsWith('wp:') || key.startsWith('pic:') || key.startsWith('wps:')) 
                   && key !== 'w:rsidR' && key !== 'w:rsidRPr' && !key.startsWith('$')) {
                 extractText(objRecord[key], false);
@@ -477,32 +481,29 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
         }
       }
     } catch {
-      // Даже прямой парсинг не помог
       throw new ProcessingError(
         `DOCX processing error: All parsers failed. ` +
-        `This may be a corrupted, password-protected, or non-standard DOCX file. ` +
-        `Try opening and re-saving in Microsoft Word or LibreOffice.`
+        `This may be a corrupted, password-protected, or non-standard DOCX file.`
       );
     }
     
-    // Если все три попытки вернули пустой текст
     return { text: '' };
   },
   xml: async (buf) => {
-    const parsed = await parseStringPromise(buf.toString("utf8"));
+    const parser = new XMLParser({ ignoreAttributes: false });
+    const parsed = parser.parse(buf.toString("utf8"));
     return { text: JSON.stringify(parsed, null, 2) };
   },
   yml: async (buf) => {
     try {
       const xmlContent = buf.toString("utf8");
-      const parsed = await parseStringPromise(xmlContent);
+      const parser = new XMLParser({ ignoreAttributes: false });
+      const parsed = parser.parse(xmlContent);
       
-      // Проверяем, является ли это YML файлом Яндекс Маркета
       if (parsed.yml_catalog && parsed.yml_catalog.shop) {
         return processYandexMarketYml(parsed);
       }
       
-      // Если это обычный YML/XML, обрабатываем как XML
       return { text: JSON.stringify(parsed, null, 2) };
     } catch (error) {
       throw new ProcessingError(`YML processing error: ${error instanceof Error ? error.message : String(error)}`);
@@ -510,11 +511,10 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
   },
   json: async (buf) => {
     try {
-      const encoding = chardet.detect(buf) || "utf-8";
+      const encoding = jschardet.detect(buf).encoding || "utf-8";
       const jsonString = iconv.decode(buf, encoding);
       const parsed = JSON.parse(jsonString);
       
-      // Если это простой объект, нормализуем его
       if (typeof parsed === 'object' && parsed !== null) {
         const flattened = flattenJsonObject(parsed);
         return { 
@@ -524,7 +524,6 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
         };
       }
       
-      // Если это массив или примитив, возвращаем как есть
       return { text: JSON.stringify(parsed, null, 2) };
     } catch (error) {
       throw new ProcessingError(`JSON parsing error: ${error instanceof Error ? error.message : String(error)}`);
@@ -534,7 +533,6 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
     try {
       return { text: await extractViaOfficeParser(buf) };
     } catch (error) {
-      // Пробрасываем специализированные ошибки как есть
       if (error instanceof UnsupportedFormatError || error instanceof ProcessingError) {
         throw error;
       }
@@ -545,7 +543,6 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
     try {
       return { text: await extractViaOfficeParser(buf) };
     } catch (error) {
-      // Пробрасываем специализированные ошибки как есть
       if (error instanceof UnsupportedFormatError || error instanceof ProcessingError) {
         throw error;
       }
@@ -556,7 +553,6 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
     try {
       return { text: await extractViaOfficeParser(buf) };
     } catch (error) {
-      // Пробрасываем специализированные ошибки как есть
       if (error instanceof UnsupportedFormatError || error instanceof ProcessingError) {
         throw error;
       }
@@ -565,7 +561,6 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
   },
 
   xlsx: async (buf) => {
-    // Используем ExcelJS напрямую для полной поддержки структуры Excel
     const workbook = new ExcelJS.Workbook();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await workbook.xlsx.load(buf as any);
@@ -576,19 +571,19 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
       worksheet.eachRow((row) => {
         const rowData: Record<string, unknown> = {};
         row.eachCell((cell, colNumber) => {
-          const columnLetter = numberToColumn(colNumber - 1);
+          const columnLetter = numberToColumn(colNumber);
           rowData[columnLetter] = cell.value;
         });
         if (Object.keys(rowData).length > 0) {
           jsonData.push(rowData);
         }
       });
-      sheets[sheetName] = limitExcelSheet(jsonData);
+      sheets[sheetName] = limitExcelSheet(jsonData, 0);
     });
     return { sheets };
   },
   csv: async (buf) => {
-    const encoding = chardet.detect(buf) || "utf-8";
+    const encoding = jschardet.detect(buf).encoding || "utf-8";
     const decoded = iconv.decode(buf, encoding);
     if (buf.length > CSV_STREAM_SIZE_LIMIT) {
       return streamCsvStrategy(decoded);
@@ -596,32 +591,23 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
     return processExcel(decoded, "csv");
   },
   pdf: async (buf) => {
-    // Используем officeparser вместо pdf-parse (officeparser использует pdf.js с 2024/05/06)
     try {
       return { text: await extractViaOfficeParser(buf) };
     } catch (error) {
-      // Fallback на pdf-parse если officeparser не справился
-      try {
-        const data = await pdfParse(buf);
-        return { text: data.text };
-      } catch (fallbackError) {
-        throw new ProcessingError(
-          `PDF processing error: Primary parser failed (${error instanceof Error ? error.message : String(error)}), ` +
-          `Fallback parser failed (${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)})`
-        );
-      }
+       throw new ProcessingError(
+          `PDF processing error: ${error instanceof Error ? error.message : String(error)}`
+       );
     }
   },
   txt: async (buf) => {
     if (buf.length > TXT_STREAM_SIZE_LIMIT) {
       return streamTxtStrategy(buf);
     }
-    const encoding = chardet.detect(buf) || "utf-8";
+    const encoding = jschardet.detect(buf).encoding || "utf-8";
     return { text: iconv.decode(buf, encoding) };
   },
   ppt: async (buf) => {
     try {
-      // Проверяем, является ли это старым PPT файлом (CFB формат)
       const signature = buf.slice(0, 8);
       const cfbSignature = Buffer.from([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]);
       
@@ -638,7 +624,6 @@ const strategies: Record<string, (buf: Buffer, ext?: string, options?: { outputF
         throw error;
       }
       
-      // Если это ошибка officeparser о CFB файлах, выдаем понятное сообщение
       if (error instanceof Error && error.message.includes('cfb files')) {
         throw new UnsupportedFormatError(
           "Старые PPT файлы (PowerPoint 97-2003) не поддерживаются. " +
@@ -687,10 +672,8 @@ async function processExcel(data: Buffer | string, ext: string): Promise<Partial
   const workbook = new ExcelJS.Workbook();
   
   if (ext === "csv") {
-    // Для CSV используем Papa Parse (уже реализовано в streamCsvStrategy)
     return streamCsvStrategy(data as string);
   } else {
-    // Для Excel файлов загружаем через ExcelJS
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await workbook.xlsx.load(data as any);
   }
@@ -709,7 +692,7 @@ async function processExcel(data: Buffer | string, ext: string): Promise<Partial
         jsonData.push(rowData);
       }
     });
-    sheets[sheetName] = limitExcelSheet(jsonData);
+    sheets[sheetName] = limitExcelSheet(jsonData, 0);
   });
   return { sheets };
 }
@@ -719,8 +702,9 @@ async function processExcel(data: Buffer | string, ext: string): Promise<Partial
  */
 async function processHtml(buf: Buffer): Promise<Partial<JsonResult>> {
   try {
-    const $ = cheerio.load(buf.toString("utf8"));
-    const rawText = $("body").text().replace(/\s+/g, " ").trim();
+    const root = parseHtml(buf.toString("utf8"));
+    const body = root.querySelector("body");
+    const rawText = body ? body.text.replace(/\s+/g, " ").trim() : "";
     const cleanText = sanitizeHtml(rawText, { allowedTags: [], allowedAttributes: {} });
     return { text: cleanText };
   } catch (error) {
@@ -885,7 +869,7 @@ export class FileToJsonNode implements INodeType {
         json = await strategies[ext](buf, ext, ext === 'docx' ? { outputFormat } : undefined);
       } catch (e) {
         // Пробрасываем специализированные ошибки как есть
-        if (e instanceof FileTypeError || 
+        if (e instanceof FileTypeError ||
             e instanceof FileTooLargeError ||
             e instanceof UnsupportedFormatError ||
             e instanceof EmptyFileError ||
@@ -900,7 +884,7 @@ export class FileToJsonNode implements INodeType {
       this.logger?.info('Processing completed', { 
         file: name, 
         size: buf.length, 
-        time: `${processingTime.toFixed(2)}ms`,
+        time: `${processingTime.toFixed(2)}ms`, 
         type: ext
       });
 
@@ -932,7 +916,7 @@ export class FileToJsonNode implements INodeType {
     };
 
     const results = await promisePool(items, processItem, maxConcurrency);
-    
+
     // Объединяем все результаты в один item
     return [[{
       json: {
@@ -943,5 +927,3 @@ export class FileToJsonNode implements INodeType {
     }]];
   }
 }
-
-// Export уже выполнен в объявлении класса
