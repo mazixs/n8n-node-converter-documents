@@ -3,26 +3,20 @@ name: Auto Release
 on:
   push:
     branches: [main]
-    paths:
-      - 'package.json'  # Только если изменилась версия
 
 permissions:
   contents: write
-  checks: write
 
 jobs:
-  check-version:
-    name: Check Version Change
+  release:
+    name: Build, Test & Release
     runs-on: ubuntu-latest
-    outputs:
-      should_release: ${{ steps.check.outputs.should_release }}
-      version: ${{ steps.check.outputs.version }}
-      
+    
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
-        fetch-depth: 2  # Нужно для сравнения с предыдущим коммитом
+        fetch-depth: 0  # Полная история для тегов
         
     - name: Check if version changed
       id: check
@@ -31,44 +25,21 @@ jobs:
         CURRENT_VERSION=$(node -p "require('./package.json').version")
         echo "Current version: $CURRENT_VERSION"
         
-        # Получаем предыдущую версию
-        git show HEAD~1:package.json > /tmp/prev-package.json 2>/dev/null || echo '{"version":"0.0.0"}' > /tmp/prev-package.json
-        PREV_VERSION=$(node -p "require('/tmp/prev-package.json').version")
-        echo "Previous version: $PREV_VERSION"
-        
         # Проверяем, существует ли уже тег
         TAG="v$CURRENT_VERSION"
+        git fetch --tags
         if git rev-parse "$TAG" >/dev/null 2>&1; then
           echo "Tag $TAG already exists, skipping release"
           echo "should_release=false" >> $GITHUB_OUTPUT
-        elif [ "$CURRENT_VERSION" != "$PREV_VERSION" ]; then
-          echo "Version changed from $PREV_VERSION to $CURRENT_VERSION"
+        else
+          echo "New version detected: $CURRENT_VERSION"
           echo "should_release=true" >> $GITHUB_OUTPUT
           echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-        else
-          echo "Version unchanged, skipping release"
-          echo "should_release=false" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
         fi
-
-  # Запускаем CI проверки
-  ci:
-    name: Run CI Checks
-    needs: check-version
-    if: needs.check-version.outputs.should_release == 'true'
-    uses: ./.github/workflows/ci.yml
-
-  # Создаём тег и релиз
-  release:
-    name: Create Release
-    runs-on: ubuntu-latest
-    needs: [check-version, ci]
-    if: needs.check-version.outputs.should_release == 'true'
-    
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      
+        
     - name: Setup Node.js
+      if: steps.check.outputs.should_release == 'true'
       uses: actions/setup-node@v4
       with:
         node-version: '22.x'
@@ -76,38 +47,56 @@ jobs:
         cache: 'npm'
         
     - name: Install Dependencies
+      if: steps.check.outputs.should_release == 'true'
       run: npm ci
       
+    - name: Lint
+      if: steps.check.outputs.should_release == 'true'
+      run: npm run lint
+      
     - name: Build
+      if: steps.check.outputs.should_release == 'true'
       run: npm run build
       
+    - name: Test
+      if: steps.check.outputs.should_release == 'true'
+      run: npm test
+      
     - name: Create and Push Tag
+      if: steps.check.outputs.should_release == 'true'
       run: |
-        VERSION="${{ needs.check-version.outputs.version }}"
-        TAG="v$VERSION"
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-        git tag -a "$TAG" -m "Release $TAG"
-        git push origin "$TAG"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        git tag -a "${{ steps.check.outputs.tag }}" -m "Release ${{ steps.check.outputs.tag }}"
+        git push origin "${{ steps.check.outputs.tag }}"
         
     - name: Create GitHub Release
+      if: steps.check.outputs.should_release == 'true'
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: v${{ needs.check-version.outputs.version }}
-        name: Release v${{ needs.check-version.outputs.version }}
+        tag_name: ${{ steps.check.outputs.tag }}
+        name: Release ${{ steps.check.outputs.tag }}
         generate_release_notes: true
         draft: false
         prerelease: false
         
     - name: Publish to npm
+      if: steps.check.outputs.should_release == 'true'
       run: npm publish --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         
     - name: Summary
+      if: steps.check.outputs.should_release == 'true'
       run: |
-        echo "## 🎉 Auto Release Complete" >> $GITHUB_STEP_SUMMARY
-        echo "- Version: ${{ needs.check-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-        echo "- npm: https://www.npmjs.com/package/@mazix/n8n-nodes-converter-documents" >> $GITHUB_STEP_SUMMARY
+        echo "## 🎉 Release ${{ steps.check.outputs.tag }} Complete" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Version:** ${{ steps.check.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **npm:** https://www.npmjs.com/package/@mazix/n8n-nodes-converter-documents" >> $GITHUB_STEP_SUMMARY
+        echo "- **GitHub:** https://github.com/mazixs/n8n-node-converter-documents/releases/tag/${{ steps.check.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+        
+    - name: Skip Summary
+      if: steps.check.outputs.should_release != 'true'
+      run: |
+        echo "## ⏭️ Release Skipped" >> $GITHUB_STEP_SUMMARY
+        echo "Tag already exists for current version" >> $GITHUB_STEP_SUMMARY

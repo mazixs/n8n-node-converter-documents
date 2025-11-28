@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.2] - 2025-11-29
+
+### 🔧 Bug Fixes
+
+- **TypeScript Fixes**: Fixed `file-type` import for v16.5.4 CommonJS compatibility
+- **ESLint Fixes**: Resolved unused variables and `any` type warnings
+- **Build Fix**: Fixed `limitExcelSheet` function signature (added required `maxRows` parameter)
+
+### 🚀 CI/CD Improvements
+
+- **Auto Release**: New simplified workflow for automatic releases on version bump
+- **npm Publish**: Automatic publishing to npmjs on new version detection
+
 ## [1.1.0] - 2025-11-29
 
 ### 🚀 New Features & Improvements
