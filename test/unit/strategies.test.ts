@@ -9,7 +9,7 @@ jest.mock('../../src/helpers', () => ({
 jest.mock('fast-xml-parser', () => {
   return {
     XMLParser: jest.fn().mockImplementation(() => ({
-      parse: jest.fn((xml) => ({ root: { element: 'value' } })), // Default mock
+      parse: jest.fn((_xml) => ({ root: { element: 'value' } })), // Default mock
     })),
   };
 });

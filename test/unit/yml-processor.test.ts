@@ -64,7 +64,6 @@ function processYandexMarketYml(parsed: any): { text: string; warning?: string }
         
         if (offer.picture) {
           const pictures = Array.isArray(offer.picture) ? offer.picture : [offer.picture];
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           offerData.pictures = pictures.map((pic: string) => pic || '');
         }
         

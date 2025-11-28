@@ -29,6 +29,7 @@ describe('processHtml', () => {
         // Add other necessary methods if needed by internal logic
         querySelectorAll: () => [],
         querySelector: () => null,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any;
     });
     
@@ -41,7 +42,8 @@ describe('processHtml', () => {
     
     mockParseHtml.mockReturnValue({
       text: 'Hello World ',
-      toString: () => htmlContent
+      toString: () => htmlContent,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     const result = await processHtml(buffer);
@@ -56,7 +58,8 @@ describe('processHtml', () => {
     
     mockParseHtml.mockReturnValue({
       text: '',
-      toString: () => htmlContent
+      toString: () => htmlContent,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     const result = await processHtml(buffer);

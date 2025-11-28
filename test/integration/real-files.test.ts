@@ -1,6 +1,3 @@
-import * as fs from 'fs';
-import * as path from 'path';
-
 // Мокаем внешние зависимости для контролируемого тестирования
 jest.mock('../../src/helpers', () => ({
   extractViaOfficeParser: jest.fn(),
@@ -134,18 +131,6 @@ const createPdfStrategy = () => async (buf: Buffer) => {
   }
 };
 
-// Утилита для загрузки тестовых файлов
-function loadSampleFile(filename: string): Buffer {
-  const filePath = path.join(__dirname, '../samples', filename);
-  if (!fs.existsSync(filePath)) {
-    // Создаем фиктивный буфер, если файла нет (для CI, если семплы не закомичены)
-    // Но лучше падать, если тест на реальные файлы
-    // throw new Error(`Sample file not found: ${filename}`);
-    return Buffer.from('mock content');
-  }
-  return fs.readFileSync(filePath);
-}
-
 describe('Real Files Integration Tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -159,6 +144,7 @@ describe('Real Files Integration Tests', () => {
         toString: () => html,
         querySelectorAll: () => [],
         querySelector: () => null,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any;
     });
   });
