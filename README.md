@@ -150,7 +150,7 @@
 
 ---
 
-## � New in v1.1.0: Enhanced Controls
+## ✨ Enhanced Controls
 
 ### 🧠 HTML Table Preservation
 When converting **HTML** or **DOCX** (in HTML mode), tables are now preserved in the output. This is critical for **RAG/LLM contexts**, allowing AI models to understand structured data instead of flattened text.
@@ -161,7 +161,7 @@ When converting **HTML** or **DOCX** (in HTML mode), tables are now preserved in
 
 ---
 
-## � XLSX Multi-Sheet Processing
+## 📊 XLSX Multi-Sheet Processing
 
 ### 🗂️ How It Works
 
@@ -261,8 +261,8 @@ npm install --production
   "sheets": {
     "Sheet1": [
       { "A": "Name", "B": "Age", "C": "City" },
-      { "A": "Alice", "B": 30, "C": "Moscow" },
-      { "A": "Bob", "B": 25, "C": "SPB" }
+      { "A": "Alice", "B": 30, "C": "New York" },
+      { "A": "Bob", "B": 25, "C": "London" }
     ]
   },
   "metadata": {
@@ -280,7 +280,7 @@ npm install --production
 {
   "user": {
     "name": "John",
-    "address": { "city": "Moscow" }
+    "address": { "city": "London" }
   }
 }
 ```
@@ -288,7 +288,7 @@ npm install --production
 **Output (flattened):**
 ```json
 {
-  "text": "{\n  \"user.name\": \"John\",\n  \"user.address.city\": \"Moscow\"\n}",
+  "text": "{\n  \"user.name\": \"John\",\n  \"user.address.city\": \"London\"\n}",
   "warning": "Multi-level JSON structure was converted to flat object"
 }
 ```
@@ -397,47 +397,50 @@ npm run lint       # Check code quality
 
 ## 📈 Latest Updates
 
-### 🎉 v1.0.22 (Current - 2025-10-10)
+### 🎉 v1.1.2 (Current - 2025-11-29)
 
 <table>
 <tr>
 <td width="50%">
 
-**🎨 UI & Quality**
-- ✅ **Node renamed**: "Document Converter"
-- ✅ **Icon fixed**: 60×60 (proper size)
-- ✅ **Code refactored**: -78 lines
-- ✅ **Zero duplication**: 100% eliminated
-- ✅ **Full error handling**: PPTX fixed
+**🚀 New Features (v1.1.0)**
+- ✅ **Preserve Tables**: Keep HTML structure in DOCX/HTML (Critical for RAG/LLM)
+- ✅ **Metadata**: Extract Author, Date, Title from Office files
+- ✅ **CSV Control**: Manual delimiter selection
+- ✅ **Max Excel Rows**: Prevent OOM on large files
+- ✅ **Scanned PDF Detection**: Smart warnings
 
 </td>
 <td width="50%">
 
-**📚 Docs & Tests**
-- ✅ **README redesign**: Badges, TOC, tables
-- ✅ **80 tests passing** (+7 XLSX)
-- ✅ **Full JSDoc**: All functions documented
-- ✅ **Better IntelliSense**: IDE support improved
-- ✅ **Professional look**: Visual tables & icons
+**🔧 Fixes & CI/CD (v1.1.2)**
+- ✅ **TypeScript**: Fixed CommonJS import issues
+- ✅ **Stability**: Improved error handling types
+- ✅ **Auto Release**: Fully automated npm publishing
+- ✅ **Build**: Fixed limitExcelSheet signature
 
 </td>
 </tr>
 </table>
 
-**What's New:**
+**What's New in 1.1.x:**
 ```diff
-+ Node renamed to "Document Converter" (better UX)
-+ Icon size fixed: 2048×1853 → 60×60
-+ Code quality: eliminated all duplication
-+ BaseConverterError class (DRY principle)
-+ checkCFBFormat() helper (unified CFB check)
-+ processViaOfficeParser() helper (unified error handling)
-+ Full JSDoc documentation added
-+ README complete visual redesign
-+ 7 new XLSX multi-sheet tests
++ Preserve Tables: DOCX/HTML tables retained for AI context
++ Metadata Extraction: Get author/date from docs
++ 10x Faster: XML/YML parsing with fast-xml-parser
++ Memory Optimization: node-html-parser replaces cheerio
++ Reliability: Robust Promise Pool and file-type fixes
 ```
 
 ### Previous Versions
+
+<details>
+<summary><b>v1.0.22</b> - UI & Quality</summary>
+
+- Node renamed to "Document Converter"
+- Icon fixed (60x60)
+- Code duplication eliminated
+</details>
 
 <details>
 <summary><b>v1.0.21</b> - DOCX to HTML Conversion</summary>
@@ -446,7 +449,6 @@ npm run lint       # Check code quality
 - outputFormat parameter (text | html)
 - Table preservation in HTML
 - AI/LLM friendly output
-- 73 tests passing
 </details>
 
 <details>
