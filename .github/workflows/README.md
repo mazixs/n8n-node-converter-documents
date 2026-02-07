@@ -3,36 +3,36 @@
 ## Workflows
 
 ### 1. CI (`ci.yml`)
-**Триггеры:** push/PR в `main`, `develop`
+**Triggers:** push/PR to `main`, `develop`
 
 Lint → Build → Test → Security Audit
 
 ### 2. Auto Release (`auto-release.yml`)
-**Триггер:** push в `main` с новой версией в `package.json`
+**Trigger:** push to `main` with a new version in `package.json`
 
-1. Запускает CI
-2. Проверяет, изменилась ли версия (сравнивает с git tags)
-3. Создаёт git tag `vX.Y.Z`
-4. Создаёт GitHub Release с автогенерированным changelog
+1. Runs CI checks
+2. Checks if version changed (compares with git tags)
+3. Creates git tag `vX.Y.Z`
+4. Creates GitHub Release with auto-generated release notes
 
-> **npm publish выполняется вручную.**
+> **npm publish is done manually.**
 
-## Как создать релиз
+## How to release
 
 ```bash
-# 1. Обновить версию
-npm version patch  # или minor / major
+# 1. Bump version
+npm version patch  # or minor / major
 
-# 2. Запушить в main
+# 2. Push to main
 git push origin main --follow-tags
 
-# 3. Дождаться CI + GitHub Release
+# 3. Wait for CI + GitHub Release
 
-# 4. Опубликовать в npm вручную
+# 4. Publish to npm manually
 npm publish --access public
 ```
 
-## Локальная проверка
+## Local verification
 
 ```bash
 npm run lint

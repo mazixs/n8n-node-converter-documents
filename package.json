@@ -9,7 +9,7 @@
     "dist/**/*.svg"
   ],
   "scripts": {
-    "build": "tsc && cp src/*.svg dist/ 2>nul || (copy src\\*.svg dist\\ 2>nul || exit 0)",
+    "build": "tsc && node -e \"require('fs').cpSync('src/icon.svg','dist/icon.svg')\"",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "jest",
