@@ -1,39 +1,21 @@
-// Тестируем processHtml функцию
+// Тестируем processHtml через стратегию html
 import { parse as parseHtml } from 'node-html-parser';
-import sanitizeHtml from 'sanitize-html';
 
-// Мокаем внешние зависимости
 jest.mock('node-html-parser');
-jest.mock('sanitize-html');
 
 const mockParseHtml = parseHtml as jest.MockedFunction<typeof parseHtml>;
-const mockSanitizeHtml = sanitizeHtml as jest.MockedFunction<typeof sanitizeHtml>;
 
-// Создаем тестовую версию processHtml на основе оригинальной логики
+// Тестовая версия processHtml на основе новой логики
 async function processHtml(buf: Buffer): Promise<{ text: string }> {
   const root = parseHtml(buf.toString("utf8"));
-  const rawText = root.text.replace(/\s+/g, " ").trim();
-  const cleanText = sanitizeHtml(rawText, { allowedTags: [], allowedAttributes: {} });
+  const body = root.querySelector("body");
+  const cleanText = body ? body.textContent.replace(/\s+/g, " ").trim() : "";
   return { text: cleanText };
 }
 
 describe('processHtml', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    
-    // Настраиваем моки по умолчанию
-    mockParseHtml.mockImplementation((html: string) => {
-      return {
-        text: html.replace(/<[^>]*>/g, ' '), // Simple mock text extraction
-        toString: () => html,
-        // Add other necessary methods if needed by internal logic
-        querySelectorAll: () => [],
-        querySelector: () => null,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any;
-    });
-    
-    mockSanitizeHtml.mockImplementation((text: string) => text.trim());
   });
 
   it('should extract text from HTML body', async () => {
@@ -41,8 +23,9 @@ describe('processHtml', () => {
     const buffer = Buffer.from(htmlContent, 'utf8');
     
     mockParseHtml.mockReturnValue({
-      text: 'Hello World ',
-      toString: () => htmlContent,
+      querySelector: jest.fn().mockReturnValue({
+        textContent: 'Hello World ',
+      }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
@@ -52,13 +35,28 @@ describe('processHtml', () => {
     expect(mockParseHtml).toHaveBeenCalledWith(htmlContent);
   });
 
-  it('should handle empty HTML', async () => {
+  it('should handle empty HTML body', async () => {
     const htmlContent = '<html><body></body></html>';
     const buffer = Buffer.from(htmlContent, 'utf8');
     
     mockParseHtml.mockReturnValue({
-      text: '',
-      toString: () => htmlContent,
+      querySelector: jest.fn().mockReturnValue({
+        textContent: '',
+      }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    const result = await processHtml(buffer);
+    
+    expect(result.text).toBe('');
+  });
+
+  it('should handle missing body tag', async () => {
+    const htmlContent = '<div>No body</div>';
+    const buffer = Buffer.from(htmlContent, 'utf8');
+    
+    mockParseHtml.mockReturnValue({
+      querySelector: jest.fn().mockReturnValue(null),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 

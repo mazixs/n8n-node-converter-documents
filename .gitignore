@@ -1,13 +1,12 @@
-# Node.js
+# Dependencies
 node_modules/
-
-# TypeScript
-*.tsbuildinfo
 
 # Build output
 dist/
+*.tsbuildinfo
 
 # Logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -22,17 +21,19 @@ Thumbs.db
 .cursor/
 .kiro/
 *.swp
+*.swo
+*~
 
-# Env
+# Environment
 .env
 .env.*
 
-# Test
+# Test coverage
 coverage/
+.nyc_output/
 
-# Misc
-*.log
+# Temp
 *.tmp
+*.temp
+.cache/
 nul
-# Prevent webpack artifacts
-bundle/*[0-9]*.FileToJsonNode.node.js

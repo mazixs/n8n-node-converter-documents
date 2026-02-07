@@ -1,4 +1,5 @@
 import { extractViaOfficeParser } from '../../src/helpers';
+import { flattenJsonObject } from '../../src/utils/flatten';
 
 // Mock dependencies
 jest.mock('../../src/helpers', () => ({
@@ -9,44 +10,14 @@ jest.mock('../../src/helpers', () => ({
 jest.mock('fast-xml-parser', () => {
   return {
     XMLParser: jest.fn().mockImplementation(() => ({
-      parse: jest.fn((_xml) => ({ root: { element: 'value' } })), // Default mock
+      parse: jest.fn((_xml) => ({ root: { element: 'value' } })),
     })),
   };
 });
 
-jest.mock('exceljs', () => ({
-  Workbook: jest.fn().mockImplementation(() => ({
-    xlsx: {
-      load: jest.fn().mockResolvedValue(undefined),
-    },
-    eachSheet: jest.fn(),
-  })),
-}));
-
 import { XMLParser } from 'fast-xml-parser';
 
 const mockExtractViaOfficeParser = extractViaOfficeParser as jest.MockedFunction<typeof extractViaOfficeParser>;
-
-// Copied helper for testing
-function flattenJsonObject(obj: unknown, prefix: string = '', result: Record<string, unknown> = {}): Record<string, unknown> {
-  if (obj === null || obj === undefined) return result;
-  if (typeof obj !== 'object' || obj instanceof Date || obj instanceof Buffer) {
-    result[prefix || 'value'] = obj;
-    return result;
-  }
-  if (Array.isArray(obj)) {
-    obj.forEach((item, index) => {
-      const key = prefix ? `${prefix}[${index}]` : `item_${index}`;
-      flattenJsonObject(item, key, result);
-    });
-    return result;
-  }
-  Object.keys(obj).forEach(key => {
-    const newKey = prefix ? `${prefix}.${key}` : key;
-    flattenJsonObject((obj as Record<string, unknown>)[key], newKey, result);
-  });
-  return result;
-}
 
 // Re-implemented strategies matching new code
 const createJsonStrategy = () => async (buf: Buffer) => {
@@ -110,8 +81,7 @@ describe('File Processing Strategies', () => {
   describe('XML Strategy', () => {
     const xmlStrategy = createXmlStrategy();
     it('should parse XML successfully', async () => {
-      // Mock XMLParser to return specific object
-      (XMLParser as jest.Mock).mockImplementation(() => ({
+      (XMLParser as unknown as jest.Mock).mockImplementation(() => ({
         parse: jest.fn().mockReturnValue({ root: { element: 'value' } }),
       }));
 

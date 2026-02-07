@@ -1,5 +1,88 @@
 # Changelog
 
+## [1.2.0] - 2025-06-25
+
+### 🏗️ Major Refactoring
+
+- **Code Decomposition**: Разбит монолитный `FileToJsonNode.node.ts` (930 строк) на модульную архитектуру:
+  - `src/types.ts` — все интерфейсы и типы (JsonResult, StrategyFn, YML типы)
+  - `src/utils/` — утилиты (sanitize, promisePool, columns, flatten)
+  - `src/processors/yml.ts` — процессор Yandex Market YML
+  - `src/strategies/index.ts` — все стратегии обработки форматов
+  - `src/FileToJsonNode.node.ts` — только класс ноды (~220 строк)
+
+- **Дедупликация кода**:
+  - `odt`, `odp`, `ods` стратегии объединены в `odfStrategy()` (было 3 копии)
+  - `doc`, `ppt` стратегии объединены в `cfbLegacyStrategy()` (было 2 копии)
+  - Удалена мёртвая функция `processExcel` (заменена `read-excel-file`)
+  - Удалён дубль `_getFirst` (заменён на `getVal`)
+  - Убрана бессмысленная ветка `if/else` в CSV стратегии (обе ветки вызывали `streamCsvStrategy`)
+
+- **Bug Fix**: `promisePool` — заменён `Array` на `Set` для корректного удаления завершённых промисов (race condition fix)
+
+### ✨ New Features
+
+- **DOCX → Markdown**: Новый `outputFormat: "markdown"` для DOCX файлов
+  - Конвертация через `mammoth` → HTML → `node-html-markdown`
+  - GFM таблицы, заголовки (ATX), bold/italic, списки
+  - Идеально для AI/LLM/RAG пайплайнов
+  - Добавлена зависимость `node-html-markdown` (чистый JS, без внешних зависимостей)
+
+### 📦 Dependencies
+
+**Удалены** (production):
+- `exceljs` → заменён на `read-excel-file` (легче, активно поддерживается)
+- `sanitize-html` → не нужен (используется `body.textContent`)
+- `jszip` → не нужен (убран JSZip fallback из DOCX)
+- `jschardet` + `iconv-lite` → заменены на `chardet` (встроенные типы, нативный Buffer.toString)
+
+**Удалены** (dev):
+- `@babel/core`, `@babel/preset-env`, `babel-loader` (webpack удалён)
+- `buffer`, `path-browserify`, `stream-browserify`, `util` (полифилы для webpack)
+- `@types/iconv-lite`, `@types/jszip`, `@types/sanitize-html` (типы удалённых пакетов)
+- `audit-ci`, `webpack`, `webpack-cli`
+
+**Добавлены**:
+- `chardet@^2.1.1` — определение кодировки
+- `read-excel-file@^6.0.3` — парсинг XLSX
+
+**Обновлены**:
+- `mammoth` → `^1.11.0`
+- `officeparser` → `^6.0.4`
+- `fast-xml-parser` → `^5.3.4`
+- `node-html-parser` → `^7.0.2`
+- `n8n-workflow` → `^2.7.0` (совместимость с n8n 2.7.0)
+- `@types/papaparse` → `^5.5.2`
+
+### 🔧 Config & Build
+
+- **tsconfig.json**: Очищен от ~100 строк закомментированных опций
+- **package.json**:
+  - Добавлено поле `files` для точного контроля npm-пакета
+  - Удалён `overrides.form-data` (был нужен для exceljs)
+  - Удалены скрипты `bundle`, `bundle:watch`, `standalone`
+  - Добавлено `usableAsTool: true` в описание ноды
+- **.npmignore**: Убраны ссылки на удалённые файлы, добавлен `AUDIT_AND_REFACTORING_PLAN.md`
+- **Удалены файлы**: `webpack.config.js`, `create-standalone.js`, `standalone/`
+
+### 🧪 Tests & CI
+
+- Обновлены unit-тесты под новую модульную структуру
+- Убраны моки `exceljs` и `sanitize-html` из тестов
+- Добавлен шаг `npm audit --omit=dev --audit-level=high` в CI pipeline
+
+### 📊 Метрики
+
+| Метрика | До (1.1.2) | После (1.2.0) |
+|---------|-----------|---------------|
+| FileToJsonNode.node.ts | 930 строк | ~220 строк |
+| Production dependencies | 11 | 8 |
+| Dev dependencies | 25 | 12 |
+| Дублирование кода | 5 мест | 0 |
+| Модулей в src/ | 4 файла | 9 файлов (4 dirs) |
+
+---
+
 ## [1.1.2] - 2025-11-29
 
 ### 🔧 Bug Fixes

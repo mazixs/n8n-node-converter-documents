@@ -1,291 +1,162 @@
-# 📄 n8n Document Converter Node
+# n8n Document Converter Node
 
 [![npm version](https://img.shields.io/npm/v/@mazix/n8n-nodes-converter-documents.svg)](https://www.npmjs.com/package/@mazix/n8n-nodes-converter-documents)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-80%20passing-brightgreen.svg)](https://github.com/mazixs/n8n-node-converter-documents)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-57%20passing-brightgreen.svg)](https://github.com/mazixs/n8n-node-converter-documents)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue.svg)](https://www.typescriptlang.org/)
+[![n8n](https://img.shields.io/badge/n8n-2.7.0-orange.svg)](https://n8n.io/)
 
-> 🚀 **n8n community node** for converting various document formats to JSON/text with AI-friendly output
-
----
-
-## 📑 Table of Contents
-
-- [Features](#-features)
-- [Supported Formats](#-supported-formats)
-- [DOCX to HTML Conversion](#-docx-to-html-conversion-v1021)
-- [XLSX Multi-Sheet Processing](#-xlsx-multi-sheet-processing)
-- [Installation](#-installation)
-- [Usage Examples](#-usage-examples)
-- [Architecture](#-architecture)
-- [Development](#-development)
-- [Latest Updates](#-latest-updates)
-- [Documentation](#-documentation)
+> **n8n community node** for converting documents to JSON/text. Supports 15+ formats with AI-friendly output.
 
 ---
 
-## ✨ Features
+## Table of Contents
 
-<table>
-<tr>
-<td width="50%">
-
-### 🎯 Core Features
-- ✅ **12+ file formats** supported
-- ✅ Automatic file type detection
-- ✅ Hybrid processing (primary + fallback)
-- ✅ Stream processing for large files
-- ✅ Promise pooling for concurrency control
-- ✅ Comprehensive error handling
-
-</td>
-<td width="50%">
-
-### 🔒 Security & Performance
-- ✅ Input validation & sanitization
-- ✅ XSS protection (sanitize-html)
-- ✅ Path traversal protection
-- ✅ Memory-efficient streaming
-- ✅ Configurable file size limits (up to 100MB)
-- ✅ JSON structure normalization
-
-</td>
-</tr>
-</table>
+- [Supported Formats](#supported-formats)
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Output Examples](#output-examples)
+- [Architecture](#architecture)
+- [Development](#development)
+- [License](#license)
 
 ---
 
-## 📚 Supported Formats
+## Supported Formats
 
-| Category | Formats | Status |
-|----------|---------|--------|
-| **Text Documents** | DOCX, ODT, TXT, PDF | ✅ Full Support |
-| **Spreadsheets** | XLSX, ODS, CSV | ✅ Multi-sheet support |
-| **Presentations** | PPTX, ODP | ✅ Full Support |
-| **Web & Data** | HTML, HTM, XML, JSON | ✅ Full Support |
-| **E-commerce** | YML (Yandex Market) | ✅ Specialized parsing |
-| **Legacy** | DOC, PPT, XLS | ❌ Not supported* |
-
-> *Legacy formats require conversion to modern formats (DOCX, PPTX, XLSX)
+| Category | Formats | Details |
+|----------|---------|---------|
+| **Documents** | DOCX, DOC, ODT, TXT, PDF | Text, HTML, or Markdown output for DOCX |
+| **Spreadsheets** | XLSX, ODS, CSV | Multi-sheet, configurable delimiter |
+| **Presentations** | PPTX, PPT, ODP | Text extraction |
+| **Web & Data** | HTML, HTM, XML, JSON | Structure-aware parsing |
+| **E-commerce** | YML (Yandex Market) | Specialized shop/offers/categories parsing |
 
 ---
 
-## 📊 DOCX to HTML Conversion (v1.0.21+)
+## Features
 
-> **Latest:** Node renamed to "Document Converter" in v1.0.22
+**Core**
+- Automatic file type detection via magic bytes
+- Strategy pattern: each format has its own processing pipeline
+- DOCX output: plain text (default), HTML, or **Markdown** (GFM tables, headings, bold/italic)
+- DOCX → Markdown ideal for AI/LLM/RAG pipelines
+- XLSX multi-sheet processing with Excel-style column names (A, B, C...)
+- JSON flattening for nested structures
+- YML (Yandex Market) specialized parser
+- `usableAsTool: true` for n8n AI Agent integration
 
-### 🎨 Choose Your Output Format
+**Reliability**
+- Concurrency control via promise pool (Set-based, no race conditions)
+- Fallback chains: DOCX uses officeparser -> mammoth, DOC/PPT uses CFB signature check + officeparser
+- File name sanitization (path traversal protection)
+- Configurable file size limits (up to 100MB)
+- Max Excel rows parameter (prevents OOM on large files)
+- Custom error classes with descriptive messages
 
-<table>
-<tr>
-<th width="50%">📝 Plain Text (Default)</th>
-<th width="50%">🌐 HTML Format</th>
-</tr>
-<tr>
-<td>
+---
 
-**Best for:**
-- Simple text extraction
-- Minimal output size
-- Maximum speed
-- Backward compatibility
+## Installation
 
-**Output size:** ~3,600 chars
-
-</td>
-<td>
-
-**Best for:**
-- Documents with **tables**
-- AI/LLM processing
-- Preserving formatting
-- Structured content
-
-**Output size:** ~58,000 chars (+1,591%)
-
-</td>
-</tr>
-</table>
-
-### 📋 Usage in n8n
+### Via n8n UI (recommended)
 
 ```
-1. Add "Document Converter" node
-2. Select "Output Format (DOCX)" parameter:
-   • Plain Text → Simple extraction
-   • HTML → Tables + formatting preserved
+Settings -> Community nodes -> Install
+Package name: @mazix/n8n-nodes-converter-documents
 ```
 
-### 💡 Example Output
+### Via CLI
 
-<details>
-<summary><b>Plain Text Output</b></summary>
+```bash
+cd ~/.n8n
+npm install @mazix/n8n-nodes-converter-documents
+# Restart n8n
+```
+
+### Manual
+
+```bash
+git clone https://github.com/mazixs/n8n-node-converter-documents.git
+cd n8n-node-converter-documents
+npm install
+npm run build
+# Copy dist/ and package.json to ~/.n8n/custom-nodes/n8n-node-converter-documents/
+```
+
+---
+
+## Usage
+
+1. Add **"Convert File to JSON"** node to your workflow
+2. Connect a node that provides binary data (e.g., Read Binary File, HTTP Request)
+3. Configure parameters:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| **Binary Property** | `data` | Name of the binary property with the file |
+| **Output Format (DOCX)** | `text` | `text`, `html`, or `markdown` (GFM with tables) |
+| **CSV Delimiter** | `auto` | Auto, `,`, `;`, `\t`, `\|` |
+| **Max Excel Rows** | `0` | Rows per sheet limit (0 = unlimited) |
+| **Max File Size (MB)** | `50` | File size limit |
+| **Concurrency** | `3` | Parallel file processing |
+
+---
+
+## Output Examples
+
+### Text document (DOCX, PDF, TXT, etc.)
 
 ```json
 {
-  "text": "Situation: Often search by one field\nAction: Create index on that field"
+  "text": "Extracted document content...",
+  "metadata": {
+    "fileName": "report.docx",
+    "fileSize": 12345,
+    "fileType": "docx",
+    "processedAt": "2026-02-08T00:00:00.000Z"
+  }
 }
 ```
-</details>
 
-<details>
-<summary><b>HTML Output (with tables)</b></summary>
+### DOCX with HTML output
 
 ```json
 {
-  "text": "<table><tr><td><strong>Situation</strong></td><td><strong>Action</strong></td></tr><tr><td>Often search by one field</td><td>Create index on that field</td></tr></table>"
+  "text": "<p>Introduction</p><table><tr><td>Name</td><td>Value</td></tr>...</table>",
+  "metadata": { "fileName": "data.docx", "fileType": "docx" }
 }
 ```
-</details>
 
-### 🎯 HTML Format Features
+### DOCX with Markdown output
 
-| Feature | Description |
-|---------|-------------|
-| **Tables** | `<table>`, `<tr>`, `<td>` - full structure preserved |
-| **Formatting** | `<strong>`, `<em>`, `<h1>`-`<h6>` |
-| **Lists** | `<ul>`, `<ol>`, `<li>` |
-| **Paragraphs** | `<p>` tags for structure |
-| **AI-Friendly** | ✅ Understood by ChatGPT, Claude, Gemini |
+```json
+{
+  "text": "# Introduction\n\n| Name | Value |\n| --- | --- |\n| Item | 100 |\n\n**Bold text** and _italic_",
+  "metadata": { "fileName": "data.docx", "fileType": "docx" }
+}
+```
 
----
-
-## ✨ Enhanced Controls
-
-### 🧠 HTML Table Preservation
-When converting **HTML** or **DOCX** (in HTML mode), tables are now preserved in the output. This is critical for **RAG/LLM contexts**, allowing AI models to understand structured data instead of flattened text.
-
-### ⚙️ Advanced CSV & Excel Control
-- **CSV Delimiter**: Manually select `,` `;` `\t` `|` or keep Auto.
-- **Max Excel Rows**: Limit rows per sheet (e.g., 1000) to prevent memory crashes on huge files.
-
----
-
-## 📊 XLSX Multi-Sheet Processing
-
-### 🗂️ How It Works
+### XLSX (multi-sheet)
 
 ```json
 {
   "sheets": {
     "Products": [
       { "A": "ID", "B": "Name", "C": "Price" },
-      { "A": 1, "B": "Apple", "C": 100 },
-      { "A": 2, "B": "Banana", "C": 50 }
+      { "A": 1, "B": "Apple", "C": 100 }
     ],
     "Orders": [
-      { "A": "Order", "B": "Quantity" },
+      { "A": "Order", "B": "Qty" },
       { "A": 101, "B": 5 }
     ]
-  }
-}
-```
-
-### 📌 Key Features
-
-| Feature | Details |
-|---------|---------|
-| **Multiple Sheets** | Each sheet = separate array in `sheets` object |
-| **Column Names** | A, B, C... Z (Excel-style) |
-| **Row Format** | Array of objects (rows) |
-| **Empty Cells** | Skipped (only filled cells included) |
-| **Size Limit** | Configurable (default: 0 / unlimited) |
-| **Memory Safe** | Large files auto-limited to prevent OOM |
-
----
-
-## 🚀 Installation
-
-### Option 1: npm Package (Recommended)
-
-Via **n8n web interface**:
-```
-Settings → Community nodes → Install
-Package name: @mazix/n8n-nodes-converter-documents
-```
-
-Or via **command line**:
-```bash
-npm install @mazix/n8n-nodes-converter-documents
-```
-
-### Option 2: Standalone Version
-
-```bash
-# 1. Clone and build
-git clone https://github.com/mazixs/n8n-node-converter-documents.git
-cd n8n-node-converter-documents
-npm install
-npm run standalone
-
-# 2. Copy to n8n
-cp -r ./standalone ~/.n8n/custom-nodes/n8n-node-converter-documents
-cd ~/.n8n/custom-nodes/n8n-node-converter-documents
-npm install
-
-# 3. Restart n8n
-```
-
-### Option 3: Manual Installation
-
-```bash
-mkdir -p ~/.n8n/custom-nodes/n8n-node-converter-documents
-cp dist/*.js dist/*.svg ~/.n8n/custom-nodes/n8n-node-converter-documents/
-cp package.json ~/.n8n/custom-nodes/n8n-node-converter-documents/
-cd ~/.n8n/custom-nodes/n8n-node-converter-documents
-npm install --production
-```
-
----
-
-## 📖 Usage Examples
-
-### Text Document Output
-
-```json
-{
-  "text": "Extracted text content...",
-  "metadata": {
-    "fileName": "document.docx",
-    "fileSize": 12345,
-    "fileType": "docx",
-    "processedAt": "2024-06-01T12:00:00.000Z"
-  }
-}
-```
-
-### Excel Spreadsheet Output
-
-```json
-{
-  "sheets": {
-    "Sheet1": [
-      { "A": "Name", "B": "Age", "C": "City" },
-      { "A": "Alice", "B": 30, "C": "New York" },
-      { "A": "Bob", "B": 25, "C": "London" }
-    ]
   },
-  "metadata": {
-    "fileName": "data.xlsx",
-    "fileSize": 23456,
-    "fileType": "xlsx"
-  }
+  "metadata": { "fileName": "data.xlsx", "fileType": "xlsx" }
 }
 ```
 
-### JSON Normalization
+### JSON (flattened)
 
-**Input:**
-```json
-{
-  "user": {
-    "name": "John",
-    "address": { "city": "London" }
-  }
-}
-```
-
-**Output (flattened):**
 ```json
 {
   "text": "{\n  \"user.name\": \"John\",\n  \"user.address.city\": \"London\"\n}",
@@ -293,262 +164,109 @@ npm install --production
 }
 ```
 
----
+### YML (Yandex Market)
 
-## 🏗️ Architecture
-
-### Strategy Pattern Implementation
-
-```typescript
-DOCX Processing Flow:
-┌─────────────────────────────────────┐
-│ 1. If outputFormat === 'html':     │
-│    → mammoth.convertToHtml()       │
-│    → [Success] Return HTML          │
-│    → [Fail] Fallback to text       │
-│                                     │
-│ 2. Text mode (default):            │
-│    → officeparser (primary)        │
-│    → mammoth.extractRawText (fb)   │
-│    → XML direct parsing (last)     │
-└─────────────────────────────────────┘
+```json
+{
+  "text": "{ \"shop\": { \"name\": \"MyShop\" }, \"currencies\": [...], \"categories\": [...], \"offers\": [...] }"
+}
 ```
-
-### Technology Stack
-
-<table>
-<tr>
-<td width="50%">
-
-**Core Libraries**
-- `officeparser` (v5.1.1) - Primary parser
-- `mammoth` (v1.9.1) - DOCX processor
-- `exceljs` (v4.4.0) - Excel handler
-- `pdf-parse` (v1.1.1) - PDF fallback
-- `papaparse` (v5.5.3) - CSV parser
-
-</td>
-<td width="50%">
-
-**Build & Quality**
-- TypeScript 5.8 (strict mode)
-- Jest (80 tests passing)
-- ESLint (TypeScript rules)
-- Webpack bundling
-- CommonJS modules
-
-</td>
-</tr>
-</table>
-
-### Security Features
-
-| Feature | Implementation |
-|---------|----------------|
-| **Input Validation** | Strict type & structure checks |
-| **XSS Protection** | `sanitize-html` library |
-| **Path Traversal** | File name sanitization |
-| **Memory Limits** | 10K rows/sheet, 50MB default |
-| **Dependency Audit** | Regular `npm audit` checks |
 
 ---
 
-## 💻 Development
-
-### Quick Start
-
-```bash
-npm install        # Install dependencies
-npm run dev        # Watch mode
-npm run build      # Compile
-npm test           # Run 80 tests
-npm run lint       # Check code quality
-```
-
-### Build Commands
-
-| Command | Description |
-|---------|-------------|
-| `npm run build` | TypeScript → JavaScript |
-| `npm run bundle` | Webpack bundling |
-| `npm run standalone` | Standalone with deps |
-| `npm run test:coverage` | Coverage report |
-| `npm run lint:fix` | Auto-fix issues |
+## Architecture
 
 ### Project Structure
 
 ```
-├── src/
-│   ├── FileToJsonNode.node.ts  # Main node (Strategy Pattern)
-│   ├── helpers.ts               # Utilities
-│   └── errors.ts                # Custom errors
-├── test/
-│   ├── unit/                    # Unit tests
-│   ├── integration/             # Integration tests
-│   └── samples/                 # Test files
-├── docs/                        # Documentation
-│   ├── SOLUTION.md
-│   ├── HTML_CONVERSION_PLAN.md
-│   └── MAMMOTH_ANALYSIS.md
-└── dist/                        # Compiled output
+src/
+├── FileToJsonNode.node.ts   # Node class (~220 lines)
+├── types.ts                 # Interfaces (JsonResult, StrategyFn, YML types)
+├── errors.ts                # Custom error classes
+├── helpers.ts               # extractViaOfficeParser, limitExcelSheet
+├── strategies/
+│   └── index.ts             # All format strategies
+├── processors/
+│   └── yml.ts               # Yandex Market YML processor
+└── utils/
+    ├── sanitize.ts          # File name sanitization
+    ├── promisePool.ts       # Concurrency control (Set-based)
+    ├── columns.ts           # numberToColumn (1→A, 27→AA)
+    ├── flatten.ts           # JSON flattening
+    └── index.ts             # Barrel export
 ```
 
----
+### Processing Flow
 
-## 📈 Latest Updates
-
-### 🎉 v1.1.2 (Current - 2025-11-29)
-
-<table>
-<tr>
-<td width="50%">
-
-**🚀 New Features (v1.1.0)**
-- ✅ **Preserve Tables**: Keep HTML structure in DOCX/HTML (Critical for RAG/LLM)
-- ✅ **Metadata**: Extract Author, Date, Title from Office files
-- ✅ **CSV Control**: Manual delimiter selection
-- ✅ **Max Excel Rows**: Prevent OOM on large files
-- ✅ **Scanned PDF Detection**: Smart warnings
-
-</td>
-<td width="50%">
-
-**🔧 Fixes & CI/CD (v1.1.2)**
-- ✅ **TypeScript**: Fixed CommonJS import issues
-- ✅ **Stability**: Improved error handling types
-- ✅ **Auto Release**: Fully automated npm publishing
-- ✅ **Build**: Fixed limitExcelSheet signature
-
-</td>
-</tr>
-</table>
-
-**What's New in 1.1.x:**
-```diff
-+ Preserve Tables: DOCX/HTML tables retained for AI context
-+ Metadata Extraction: Get author/date from docs
-+ 10x Faster: XML/YML parsing with fast-xml-parser
-+ Memory Optimization: node-html-parser replaces cheerio
-+ Reliability: Robust Promise Pool and file-type fixes
+```
+Input binary → detect file type (magic bytes) → select strategy → process → output JSON
+                                                      │
+                              ┌────────────────────────┼────────────────────┐
+                              │                        │                    │
+                         Text formats            Spreadsheets         Special
+                     (DOCX, PDF, TXT,          (XLSX, CSV, ODS)    (XML, JSON,
+                      PPTX, HTML, ODT,                               YML, HTML)
+                      ODP, DOC, PPT)
 ```
 
-### Previous Versions
+### Technology Stack
 
-<details>
-<summary><b>v1.0.22</b> - UI & Quality</summary>
-
-- Node renamed to "Document Converter"
-- Icon fixed (60x60)
-- Code duplication eliminated
-</details>
-
-<details>
-<summary><b>v1.0.21</b> - DOCX to HTML Conversion</summary>
-
-- DOCX to HTML conversion with table support
-- outputFormat parameter (text | html)
-- Table preservation in HTML
-- AI/LLM friendly output
-</details>
-
-<details>
-<summary><b>v1.0.20</b> - TextBox & Shapes Support</summary>
-
-- Extract text from TextBoxes and shapes
-- ONLYOFFICE document fix
-- 62 tests passing
-</details>
-
-<details>
-<summary><b>v1.0.19</b> - ONLYOFFICE Parser Fix</summary>
-
-- Fixed XML namespace extraction
-- No more schema URLs in output
-- 61 tests passing
-</details>
+| Component | Library | Version |
+|-----------|---------|---------|
+| DOCX/PDF/PPTX/OD* | officeparser | ^6.0.4 |
+| DOCX (HTML/MD) | mammoth | ^1.11.0 |
+| HTML → Markdown | node-html-markdown | ^2.0.0 |
+| XLSX | read-excel-file | ^6.0.3 |
+| CSV | papaparse | ^5.5.3 |
+| XML/YML | fast-xml-parser | ^5.3.4 |
+| HTML | node-html-parser | ^7.0.2 |
+| Encoding | chardet | ^2.1.1 |
+| File type | file-type | 16.5.4 |
+| n8n SDK | n8n-workflow | ^2.7.0 |
+| Runtime | Node.js | 22.x |
+| Language | TypeScript | 5.8 (strict) |
+| Tests | Jest | 30.x |
 
 ---
 
-## 📚 Documentation
+## Development
 
-| Document | Description |
-|----------|-------------|
-| [CHANGELOG.md](CHANGELOG.md) | Complete version history |
-| [SOLUTION.md](docs/SOLUTION.md) | Architecture overview |
-| [HTML_CONVERSION_PLAN.md](docs/HTML_CONVERSION_PLAN.md) | DOCX to HTML implementation |
-| [MAMMOTH_ANALYSIS.md](docs/MAMMOTH_ANALYSIS.md) | Library research findings |
-| [optimization_plan.md](docs/optimization_plan.md) | Performance strategies |
-| [security.md](docs/security.md) | Security features |
-
----
-
-## 🔧 Troubleshooting
-
-### Common Issues
-
-**Error: `Cannot find module 'exceljs'`**
 ```bash
-# Solution 1: Use standalone version (recommended)
-npm run standalone
-
-# Solution 2: Check dependencies
-cd ~/.n8n/custom-nodes/n8n-node-converter-documents
-npm list
-npm install
+npm install          # Install dependencies
+npm run build        # Compile TypeScript
+npm test             # Run 57 tests (13 suites)
+npm run lint         # ESLint check
+npm run dev          # Watch mode
+npm run test:coverage # Coverage report
 ```
 
-**Large files causing OOM**
-- Split files into smaller parts
-- Reduce `maxFileSize` parameter
-- Use streaming for CSV/TXT formats
+### CI/CD
+
+- **CI** (`ci.yml`): lint -> build -> test -> security audit on push/PR to main/develop
+- **Auto Release** (`auto-release.yml`): creates GitHub Release + git tag on version bump in main
+- **npm publish**: manual (`npm publish --access public`)
 
 ---
 
-## ⚠️ Limitations
+## Limitations
 
-| Limitation | Details | Workaround |
-|------------|---------|------------|
-| **Legacy formats** | DOC, PPT, XLS not supported | Convert to DOCX, PPTX, XLSX |
-| **Memory** | Large PDF/XLSX load into RAM | Split files or increase memory |
-| **File size** | Default 50MB limit | Configurable up to 100MB |
-
----
-
-## 📊 Statistics
-
-- **12+** file formats supported
-- **80** tests passing
-- **5** specialized parsers
-- **10K** rows per sheet limit
-- **100MB** max file size
-- **0** critical vulnerabilities
+| Limitation | Details |
+|------------|---------|
+| **Legacy XLS** | Binary Excel not supported, convert to XLSX |
+| **file-type** | Pinned to v16.5.4 (last CJS version, v17+ is ESM-only) |
+| **Scanned PDFs** | Image-based PDFs return empty text (no OCR) |
+| **Large files** | PDF/XLSX load into RAM; use Max File Size / Max Rows to control |
 
 ---
 
-## 🤝 Contributing
+## License
 
-Issues and pull requests are welcome!
-
----
-
-## 📝 License
-
-MIT © mazix
+[MIT](LICENSE) © mazix
 
 ---
 
-## 🔗 Links
+## Links
 
-- [npm Package](https://www.npmjs.com/package/@mazix/n8n-nodes-converter-documents)
-- [GitHub Repository](https://github.com/mazixs/n8n-node-converter-documents)
-- [n8n Community](https://community.n8n.io/)
-
----
-
-<div align="center">
-
-**Made with ❤️ for the n8n community**
-
-If you find this helpful, please ⭐ star the repository!
-
-</div>
+- [npm](https://www.npmjs.com/package/@mazix/n8n-nodes-converter-documents)
+- [GitHub](https://github.com/mazixs/n8n-node-converter-documents)
+- [Changelog](CHANGELOG.md)

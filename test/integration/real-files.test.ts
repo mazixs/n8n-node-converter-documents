@@ -14,52 +14,13 @@ jest.mock('node-html-parser', () => ({
   parse: jest.fn(),
 }));
 
-jest.mock('exceljs', () => ({
-  Workbook: jest.fn().mockImplementation(() => ({
-    xlsx: {
-      load: jest.fn().mockResolvedValue(undefined),
-    },
-    eachSheet: jest.fn(),
-  })),
-}));
-
-jest.mock('sanitize-html');
-
 import { extractViaOfficeParser } from '../../src/helpers';
 import { XMLParser } from 'fast-xml-parser';
 import { parse as parseHtml } from 'node-html-parser';
-import sanitizeHtml from 'sanitize-html';
+import { flattenJsonObject } from '../../src/utils/flatten';
 
 const mockExtractViaOfficeParser = extractViaOfficeParser as jest.MockedFunction<typeof extractViaOfficeParser>;
 const mockParseHtml = parseHtml as jest.MockedFunction<typeof parseHtml>;
-const mockSanitizeHtml = sanitizeHtml as jest.MockedFunction<typeof sanitizeHtml>;
-
-// Импортируем функции для тестирования (копируем из основного файла)
-function flattenJsonObject(obj: unknown, prefix: string = '', result: Record<string, unknown> = {}): Record<string, unknown> {
-  if (obj === null || obj === undefined) {
-    return result;
-  }
-
-  if (typeof obj !== 'object' || obj instanceof Date || obj instanceof Buffer) {
-    result[prefix || 'value'] = obj;
-    return result;
-  }
-
-  if (Array.isArray(obj)) {
-    obj.forEach((item, index) => {
-      const key = prefix ? `${prefix}[${index}]` : `item_${index}`;
-      flattenJsonObject(item, key, result);
-    });
-    return result;
-  }
-
-  Object.keys(obj).forEach(key => {
-    const newKey = prefix ? `${prefix}.${key}` : key;
-    flattenJsonObject((obj as Record<string, unknown>)[key], newKey, result);
-  });
-
-  return result;
-}
 
 // Стратегии для тестирования
 const createJsonStrategy = () => async (buf: Buffer) => {
@@ -88,8 +49,8 @@ const createTxtStrategy = () => async (buf: Buffer) => {
 
 const createHtmlStrategy = () => async (buf: Buffer) => {
   const root = parseHtml(buf.toString("utf8"));
-  const rawText = root.text.replace(/\s+/g, " ").trim();
-  const cleanText = sanitizeHtml(rawText, { allowedTags: [], allowedAttributes: {} });
+  const body = root.querySelector("body");
+  const cleanText = body ? body.textContent.replace(/\s+/g, " ").trim() : "";
   return { text: cleanText };
 };
 
@@ -135,15 +96,20 @@ describe('Real Files Integration Tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     
-    // Настраиваем моки
-    mockSanitizeHtml.mockImplementation((text: string) => text);
-    
     mockParseHtml.mockImplementation((html: string) => {
       return {
         text: html.replace(/<[^>]*>/g, ' '), 
+        textContent: html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),
         toString: () => html,
         querySelectorAll: () => [],
-        querySelector: () => null,
+        querySelector: (selector: string) => {
+          if (selector === 'body') {
+            return {
+              textContent: html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),
+            };
+          }
+          return null;
+        },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any;
     });
@@ -152,7 +118,6 @@ describe('Real Files Integration Tests', () => {
   describe('JSON Files', () => {
     it('should process nested-objects.json with flattening', async () => {
       const jsonStrategy = createJsonStrategy();
-      // Mocking content if file load fails or returns mock
       const content = JSON.stringify({
         company: {
           name: "Tech",
@@ -196,7 +161,6 @@ describe('Real Files Integration Tests', () => {
       expect(result.text).toContain('greetings.russian');
       expect(result.text).toContain('greetings.hindi');
       
-      // Проверяем что Unicode символы сохранились
       const parsedResult = JSON.parse(result.text);
       expect(parsedResult['greetings.japanese']).toBe('こんにちは');
       expect(parsedResult['greetings.arabic']).toBe('مرحبا');
@@ -228,21 +192,18 @@ describe('Real Files Integration Tests', () => {
       const result = await htmlStrategy(buffer);
       
       expect(result.text).toBeDefined();
-      // With mock implementation, it replaces tags with space
       expect(result.text).toContain('Title');
       expect(result.text).toContain('Text');
       expect(mockParseHtml).toHaveBeenCalled();
-      expect(mockSanitizeHtml).toHaveBeenCalled();
     });
   });
 
   describe('XML Files', () => {
     it('should process large-dataset.xml (5.4MB)', async () => {
       const xmlStrategy = createXmlStrategy();
-      const buffer = Buffer.alloc(5 * 1024 * 1024 + 1); // > 5MB dummy buffer
+      const buffer = Buffer.alloc(5 * 1024 * 1024 + 1);
       
-      // Мокаем парсер для большого файла
-      (XMLParser as jest.Mock).mockImplementation(() => ({
+      (XMLParser as unknown as jest.Mock).mockImplementation(() => ({
         parse: jest.fn().mockReturnValue({ root: { records: 'Large dataset processed' } }),
       }));
       
@@ -310,8 +271,8 @@ describe('Real Files Integration Tests', () => {
       const largeXmlBuffer = Buffer.alloc(5 * 1024 * 1024 + 1);
       const largeDocxBuffer = Buffer.alloc(10 * 1024 * 1024 + 1);
       
-      expect(largeXmlBuffer.length).toBeGreaterThan(5 * 1024 * 1024); // > 5MB
-      expect(largeDocxBuffer.length).toBeGreaterThan(10 * 1024 * 1024); // > 10MB
+      expect(largeXmlBuffer.length).toBeGreaterThan(5 * 1024 * 1024);
+      expect(largeDocxBuffer.length).toBeGreaterThan(10 * 1024 * 1024);
       
       expect(largeXmlBuffer).toBeInstanceOf(Buffer);
       expect(largeDocxBuffer).toBeInstanceOf(Buffer);

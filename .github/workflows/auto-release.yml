@@ -8,24 +8,27 @@ permissions:
   contents: write
 
 jobs:
+  # CI проверки перед релизом
+  ci:
+    name: CI Checks
+    uses: ./.github/workflows/ci.yml
+
+  # Релиз только если CI прошёл и версия изменилась
   release:
-    name: Build, Test & Release
+    name: Create GitHub Release
     runs-on: ubuntu-latest
+    needs: ci
     
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Полная история для тегов
+        fetch-depth: 0
         
     - name: Check if version changed
       id: check
       run: |
-        # Получаем текущую версию
         CURRENT_VERSION=$(node -p "require('./package.json').version")
-        echo "Current version: $CURRENT_VERSION"
-        
-        # Проверяем, существует ли уже тег
         TAG="v$CURRENT_VERSION"
         git fetch --tags
         if git rev-parse "$TAG" >/dev/null 2>&1; then
@@ -38,30 +41,6 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
         fi
         
-    - name: Setup Node.js
-      if: steps.check.outputs.should_release == 'true'
-      uses: actions/setup-node@v4
-      with:
-        node-version: '22.x'
-        registry-url: 'https://registry.npmjs.org'
-        cache: 'npm'
-        
-    - name: Install Dependencies
-      if: steps.check.outputs.should_release == 'true'
-      run: npm ci
-      
-    - name: Lint
-      if: steps.check.outputs.should_release == 'true'
-      run: npm run lint
-      
-    - name: Build
-      if: steps.check.outputs.should_release == 'true'
-      run: npm run build
-      
-    - name: Test
-      if: steps.check.outputs.should_release == 'true'
-      run: npm test
-      
     - name: Create and Push Tag
       if: steps.check.outputs.should_release == 'true'
       run: |
@@ -80,23 +59,18 @@ jobs:
         draft: false
         prerelease: false
         
-    - name: Publish to npm
-      if: steps.check.outputs.should_release == 'true'
-      run: npm publish --access public
-      env:
-        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        
-    - name: Summary
+    - name: Release Summary
       if: steps.check.outputs.should_release == 'true'
       run: |
-        echo "## 🎉 Release ${{ steps.check.outputs.tag }} Complete" >> $GITHUB_STEP_SUMMARY
+        echo "## Release ${{ steps.check.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "- **Version:** ${{ steps.check.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **npm:** https://www.npmjs.com/package/@mazix/n8n-nodes-converter-documents" >> $GITHUB_STEP_SUMMARY
         echo "- **GitHub:** https://github.com/mazixs/n8n-node-converter-documents/releases/tag/${{ steps.check.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "> npm publish выполняется вручную: \`npm publish --access public\`" >> $GITHUB_STEP_SUMMARY
         
     - name: Skip Summary
       if: steps.check.outputs.should_release != 'true'
       run: |
-        echo "## ⏭️ Release Skipped" >> $GITHUB_STEP_SUMMARY
+        echo "## Release Skipped" >> $GITHUB_STEP_SUMMARY
         echo "Tag already exists for current version" >> $GITHUB_STEP_SUMMARY

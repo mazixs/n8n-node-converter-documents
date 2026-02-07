@@ -1,5 +1,5 @@
 // Вспомогательные функции для работы с файлами в кастомном ноде n8n
-import { parseOfficeAsync } from 'officeparser';
+import { parseOffice } from 'officeparser';
 
 /**
  * Извлекает текст из буфера с помощью officeparser
@@ -8,10 +8,11 @@ import { parseOfficeAsync } from 'officeparser';
  * @returns Promise с извлеченным текстом
  * @throws Error если файл не удалось обработать
  */
-export function extractViaOfficeParser(
+export async function extractViaOfficeParser(
   buffer: Buffer
 ): Promise<string> {
-  return parseOfficeAsync(buffer);
+  const ast = await parseOffice(buffer);
+  return ast.toText();
 }
 
 /**

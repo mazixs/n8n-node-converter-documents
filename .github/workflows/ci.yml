@@ -12,8 +12,8 @@ permissions:
   checks: write
 
 jobs:
-  test:
-    name: Test & Build
+  ci:
+    name: Lint → Build → Test
     runs-on: ubuntu-latest
     
     steps:
@@ -29,6 +29,10 @@ jobs:
     - name: Install Dependencies
       run: npm ci
       
+    - name: Security Audit
+      run: npm audit --omit=dev --audit-level=high
+      continue-on-error: true
+      
     - name: Lint
       run: npm run lint
       
@@ -38,9 +42,10 @@ jobs:
     - name: Test
       run: npm test
       
-    - name: Test Summary
+    - name: Summary
       if: always()
       run: |
-        echo "## ✅ Test Results" >> $GITHUB_STEP_SUMMARY
-        echo "- Node.js: $(node --version)" >> $GITHUB_STEP_SUMMARY
-        echo "- npm: $(npm --version)" >> $GITHUB_STEP_SUMMARY
+        echo "## CI Results" >> $GITHUB_STEP_SUMMARY
+        echo "- **Node.js:** $(node --version)" >> $GITHUB_STEP_SUMMARY
+        echo "- **npm:** $(npm --version)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY

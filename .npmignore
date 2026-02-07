@@ -1,58 +1,32 @@
-# Исходный код TypeScript (не нужен в production)
+# Source code
 src/
 
-# Bundle файлы webpack (не используются)
-bundle/
-
-# Standalone версия (создается отдельно)
-standalone/
-
-# Конфигурация webpack
-webpack.config.js
-
-# Скрипт для создания standalone версии
-create-standalone.js
-
-# Документация разработки (НЕ НУЖНА В PRODUCTION)
-docs/
-audit.md
+# Documentation
+AUDIT_AND_REFACTORING_PLAN.md
 CHANGELOG.md
-CONTRIBUTING.md
-SOLUTION.md
-FIX-COMMUNITY-NODE.md
-CLEANUP_DIST.md
-clean_plan.md
-ocr_example.md
-optimization_plan.md
+docs/
 
-# Тесты и тестовые файлы (включая новые папки)
+# Tests
 test/
-test/unit/
-test/integration/
-test/samples/
-test/fixtures/
 *.test.ts
 *.test.js
 *.spec.ts
 *.spec.js
 
-# Покрытие кода
+# Coverage
 coverage/
 .nyc_output/
 
-# Конфигурационные файлы разработки
+# Dev configs
 tsconfig.json
 jest.config.js
 eslint.config.mjs
 .eslintrc*
 
-# CI/CD и GitHub
+# CI/CD
 .github/
-.gitlab-ci.yml
-.travis.yml
-.circleci/
 
-# Редакторы и IDE
+# IDE
 .vscode/
 .idea/
 .cursor/
@@ -61,7 +35,7 @@ eslint.config.mjs
 *.swo
 *~
 
-# Системные файлы
+# OS
 .DS_Store
 Thumbs.db
 
@@ -73,32 +47,27 @@ Thumbs.db
 # npm
 node_modules/
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 package-lock.json
 yarn.lock
 
-# Source maps (не нужны в production)
+# Source maps
 *.js.map
 
-# Временные файлы
+# Temp
 *.tmp
 *.temp
 .cache/
 nul
-
-# Логи
-logs/
 *.log
 
-# Прочие файлы разработки
+# Env
 .env*
 .editorconfig
 .prettierrc*
 .prettierignore
 
 # В пакет попадут только:
-# - dist/ (скомпилированные JS и .d.ts файлы)
+# - dist/ (JS + .d.ts + SVG)
 # - package.json
-# - README.md  
-# - LICENSE 
+# - README.md
+# - LICENSE

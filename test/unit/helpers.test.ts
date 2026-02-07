@@ -1,12 +1,12 @@
 import { extractViaOfficeParser, limitExcelSheet } from '../../src/helpers';
 
-// Mock officeparser module
+// Mock officeparser module (v6 API: parseOffice returns AST with toText())
 jest.mock('officeparser', () => ({
-  parseOfficeAsync: jest.fn()
+  parseOffice: jest.fn()
 }));
 
-import { parseOfficeAsync } from 'officeparser';
-const mockParseOfficeAsync = parseOfficeAsync as jest.MockedFunction<typeof parseOfficeAsync>;
+import { parseOffice } from 'officeparser';
+const mockParseOffice = parseOffice as jest.MockedFunction<typeof parseOffice>;
 
 describe('helpers', () => {
   beforeEach(() => {
@@ -47,18 +47,19 @@ describe('helpers', () => {
   describe('extractViaOfficeParser', () => {
     it('should extract text successfully', async () => {
       const expectedText = 'extracted text from office file';
-      mockParseOfficeAsync.mockResolvedValue(expectedText);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mockParseOffice.mockResolvedValue({ toText: () => expectedText } as any);
 
       const buffer = Buffer.from('mock office file content');
       const result = await extractViaOfficeParser(buffer);
 
       expect(result).toBe(expectedText);
-      expect(mockParseOfficeAsync).toHaveBeenCalledWith(buffer);
+      expect(mockParseOffice).toHaveBeenCalledWith(buffer);
     });
 
     it('should reject on officeparser error', async () => {
       const mockError = new Error('OfficeParser extraction failed');
-      mockParseOfficeAsync.mockRejectedValue(mockError);
+      mockParseOffice.mockRejectedValue(mockError);
 
       const buffer = Buffer.from('invalid office file content');
       
