@@ -20,8 +20,7 @@ import type { JsonResult, StrategyFn } from "../types";
 
 // Константы
 const CSV_STREAM_ROW_LIMIT = 100000;
-const CSV_STREAM_SIZE_LIMIT = 10 * 1024 * 1024; // 10 МБ
-const TXT_STREAM_SIZE_LIMIT = 10 * 1024 * 1024; // 10 МБ
+const TXT_STREAM_SIZE_LIMIT = 10 * 1024 * 1024; // 10 MB
 const TXT_STREAM_CHAR_LIMIT = 1_000_000; // 1 млн символов
 
 // --- Вспомогательные функции ---
