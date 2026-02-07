@@ -2,198 +2,192 @@
 
 ## [1.2.0] - 2025-06-25
 
-### 🏗️ Major Refactoring
+### Major Refactoring
 
-- **Code Decomposition**: Разбит монолитный `FileToJsonNode.node.ts` (930 строк) на модульную архитектуру:
-  - `src/types.ts` — все интерфейсы и типы (JsonResult, StrategyFn, YML типы)
-  - `src/utils/` — утилиты (sanitize, promisePool, columns, flatten)
-  - `src/processors/yml.ts` — процессор Yandex Market YML
-  - `src/strategies/index.ts` — все стратегии обработки форматов
-  - `src/FileToJsonNode.node.ts` — только класс ноды (~220 строк)
+- **Code Decomposition**: The monolithic `FileToJsonNode.node.ts` (930 LOC) was split into a modular architecture:
+  - `src/types.ts` — all interfaces and types (JsonResult, StrategyFn, YML types)
+  - `src/utils/` — shared utilities (sanitize, promisePool, columns, flatten)
+  - `src/processors/yml.ts` — Yandex Market YML processor
+  - `src/strategies/index.ts` — format strategies
+  - `src/FileToJsonNode.node.ts` — node class only (~220 LOC)
 
-- **Дедупликация кода**:
-  - `odt`, `odp`, `ods` стратегии объединены в `odfStrategy()` (было 3 копии)
-  - `doc`, `ppt` стратегии объединены в `cfbLegacyStrategy()` (было 2 копии)
-  - Удалена мёртвая функция `processExcel` (заменена `read-excel-file`)
-  - Удалён дубль `_getFirst` (заменён на `getVal`)
-  - Убрана бессмысленная ветка `if/else` в CSV стратегии (обе ветки вызывали `streamCsvStrategy`)
+- **Code Deduplication**:
+  - `odt`, `odp`, `ods` strategies merged into `odfStrategy()` (was 3 copies)
+  - `doc`, `ppt` strategies merged into `cfbLegacyStrategy()` (was 2 copies)
+  - Removed dead `processExcel` (replaced by `read-excel-file`)
+  - Removed `_getFirst` duplicate (replaced by `getVal`)
+  - Removed redundant CSV `if/else` branch (both sides called `streamCsvStrategy`)
 
-- **Bug Fix**: `promisePool` — заменён `Array` на `Set` для корректного удаления завершённых промисов (race condition fix)
+- **Bug Fix**: `promisePool` now uses a `Set` instead of `Array` to avoid race conditions when removing finished promises
 
-### ✨ New Features
+### New Features
 
-- **DOCX → Markdown**: Новый `outputFormat: "markdown"` для DOCX файлов
-  - Конвертация через `mammoth` → HTML → `node-html-markdown`
-  - GFM таблицы, заголовки (ATX), bold/italic, списки
-  - Идеально для AI/LLM/RAG пайплайнов
-  - Добавлена зависимость `node-html-markdown` (чистый JS, без внешних зависимостей)
+- **DOCX → Markdown**: New `outputFormat: "markdown"` for DOCX files
+  - Pipeline: `mammoth` → HTML → `node-html-markdown`
+  - GFM tables, ATX headings, bold/italic, lists
+  - Ideal for AI/LLM/RAG pipelines
+  - Added dependency `node-html-markdown` (pure JS, zero extra deps)
 
-### 📦 Dependencies
+### Dependencies
 
-**Удалены** (production):
-- `exceljs` → заменён на `read-excel-file` (легче, активно поддерживается)
-- `sanitize-html` → не нужен (используется `body.textContent`)
-- `jszip` → не нужен (убран JSZip fallback из DOCX)
-- `jschardet` + `iconv-lite` → заменены на `chardet` (встроенные типы, нативный Buffer.toString)
+**Removed** (production):
+- `exceljs` → replaced by `read-excel-file` (lighter, actively maintained)
+- `sanitize-html` → no longer needed (using `body.textContent`)
+- `jszip` → no longer needed (DOCX fallback removed)
+- `jschardet` + `iconv-lite` → replaced with `chardet` (builtin types, native Buffer.toString)
 
-**Удалены** (dev):
-- `@babel/core`, `@babel/preset-env`, `babel-loader` (webpack удалён)
-- `buffer`, `path-browserify`, `stream-browserify`, `util` (полифилы для webpack)
-- `@types/iconv-lite`, `@types/jszip`, `@types/sanitize-html` (типы удалённых пакетов)
+**Removed** (dev):
+- `@babel/core`, `@babel/preset-env`, `babel-loader` (webpack dropped)
+- `buffer`, `path-browserify`, `stream-browserify`, `util` (webpack polyfills)
+- `@types/iconv-lite`, `@types/jszip`, `@types/sanitize-html` (types for removed deps)
 - `audit-ci`, `webpack`, `webpack-cli`
 
-**Добавлены**:
-- `chardet@^2.1.1` — определение кодировки
-- `read-excel-file@^6.0.3` — парсинг XLSX
+**Added**:
+- `chardet@^2.1.1` — encoding detection
+- `read-excel-file@^6.0.3` — XLSX parsing
 
-**Обновлены**:
+**Updated**:
 - `mammoth` → `^1.11.0`
 - `officeparser` → `^6.0.4`
 - `fast-xml-parser` → `^5.3.4`
 - `node-html-parser` → `^7.0.2`
-- `n8n-workflow` → `^2.7.0` (совместимость с n8n 2.7.0)
+- `n8n-workflow` → `^2.7.0` (aligned with n8n 2.7.0)
 - `@types/papaparse` → `^5.5.2`
 
-### 🔧 Config & Build
+### Config & Build
 
-- **tsconfig.json**: Очищен от ~100 строк закомментированных опций
+- **tsconfig.json**: trimmed ~100 lines of commented defaults
 - **package.json**:
-  - Добавлено поле `files` для точного контроля npm-пакета
-  - Удалён `overrides.form-data` (был нужен для exceljs)
-  - Удалены скрипты `bundle`, `bundle:watch`, `standalone`
-  - Добавлено `usableAsTool: true` в описание ноды
-- **.npmignore**: Убраны ссылки на удалённые файлы, добавлен `AUDIT_AND_REFACTORING_PLAN.md`
-- **Удалены файлы**: `webpack.config.js`, `create-standalone.js`, `standalone/`
+  - Added `files` whitelist for precise npm packages
+  - Removed `overrides.form-data` (was needed only for exceljs)
+  - Removed `bundle`, `bundle:watch`, `standalone` scripts
+  - Added `usableAsTool: true` to node description
+- **.npmignore**: removed references to deleted files, added `AUDIT_AND_REFACTORING_PLAN.md`
+- **Deleted files**: `webpack.config.js`, `create-standalone.js`, `standalone/`
 
-### 🧪 Tests & CI
+### Tests & CI
 
-- Обновлены unit-тесты под новую модульную структуру
-- Убраны моки `exceljs` и `sanitize-html` из тестов
-- Добавлен шаг `npm audit --omit=dev --audit-level=high` в CI pipeline
+- Updated unit tests to match the modular structure
+- Removed `exceljs` and `sanitize-html` mocks
+- Added `npm audit --omit=dev --audit-level=high` to CI pipeline
 
-### 📊 Метрики
+### Metrics
 
-| Метрика | До (1.1.2) | После (1.2.0) |
-|---------|-----------|---------------|
-| FileToJsonNode.node.ts | 930 строк | ~220 строк |
-| Production dependencies | 11 | 8 |
-| Dev dependencies | 25 | 12 |
-| Дублирование кода | 5 мест | 0 |
-| Модулей в src/ | 4 файла | 9 файлов (4 dirs) |
+| Metric | Before (1.1.2) | After (1.2.0) |
+|--------|----------------|---------------|
+| FileToJsonNode.node.ts | 930 LOC | ~220 LOC |
+| Production deps | 11 | 8 |
+| Dev deps | 25 | 12 |
+| Code duplication | 5 spots | 0 |
+| Modules in `src/` | 4 files | 9 files (4 dirs) |
 
 ---
 
 ## [1.1.2] - 2025-11-29
 
-### 🔧 Bug Fixes
+### Bug Fixes
 
-- **TypeScript Fixes**: Fixed `file-type` import for v16.5.4 CommonJS compatibility
-- **ESLint Fixes**: Resolved unused variables and `any` type warnings
-- **Build Fix**: Fixed `limitExcelSheet` function signature (added required `maxRows` parameter)
+- **TypeScript Fixes**: Corrected `file-type` import for v16.5.4 CommonJS compatibility
+- **ESLint Fixes**: Removed unused variables and `any` warnings
+- **Build Fix**: Updated `limitExcelSheet` signature (added required `maxRows` argument)
 
-### 🚀 CI/CD Improvements
+### CI/CD Improvements
 
-- **Auto Release**: New simplified workflow for automatic releases on version bump
-- **npm Publish**: Automatic publishing to npmjs on new version detection
+- **Auto Release**: Simplified workflow triggered on version bumps
+- **npm Publish**: Automatic publishing to npmjs when version changes
 
 ## [1.1.0] - 2025-11-29
 
-### 🚀 New Features & Improvements
+### New Features & Improvements
 
-- **🧠 Preserve Tables**: New option to keep HTML tables and structure when converting DOCX/HTML (Critical for RAG/LLM context).
-- **📊 Metadata Extraction**: Added metadata extraction (Author, Date, Title) for Office documents (DOCX, XLSX, PPTX).
-- **⚙️ CSV Control**: Added manual **CSV Delimiter** selection (Auto, Comma, Semicolon, Tab, Pipe).
-- **📈 Scalability**: Added **Max Excel Rows** parameter (0 = unlimited) to prevent OOM on large files.
-- **🛡️ Scanned PDF Detection**: Intelligent warning system for potential scanned PDFs (image-based).
+- **Preserve Tables**: New option to keep HTML tables/structure when converting DOCX/HTML (critical for RAG/LLM)
+- **Metadata Extraction**: Author / Date / Title extraction for DOCX, XLSX, PPTX
+- **CSV Control**: Manual **CSV Delimiter** (Auto, Comma, Semicolon, Tab, Pipe)
+- **Scalability**: **Max Excel Rows** parameter (0 = unlimited) to prevent OOM
+- **Scanned PDF Detection**: Warnings for suspected scanned/image PDFs
 
-### 🛠 Performance & Optimization
+### Performance & Optimization
 
-- **⚡ 10x Faster XML/YML**: Switched from `xml2js` to `fast-xml-parser` (streaming-ready logic).
-- **📉 Reduced Memory Usage**:
-  - Replaced `cheerio` (heavy DOM) with `node-html-parser` (lightweight).
-  - Removed `pdf-parse` (duplicate dependency).
-- **🔒 Reliability**:
-  - Refactored `Promise Pool` to isolated error handling (one bad file won't crash the batch).
-  - Upgraded `chardet` to `jschardet` for better encoding detection.
-  - Fixed `file-type` build compatibility issues.
+- **10x faster XML/YML**: Switched from `xml2js` to `fast-xml-parser`
+- **Lower memory**:
+  - Replaced `cheerio` with `node-html-parser`
+  - Removed `pdf-parse` duplicate
+- **Reliability**:
+  - Refactored Promise Pool (isolated errors)
+  - Upgraded `chardet` → `jschardet`
+  - Fixed `file-type` build compatibility
 
 ## [1.0.22] - 2025-10-10
 
-### 🎨 UI & Branding
+### UI & Branding
 
 - **Node Renamed**: "Convert File to JSON" → **"Document Converter"**
   - Better reflects actual functionality (text, HTML, sheets)
   - More intuitive for users
-  - Updated display name and defaults
+  - Updated default display name
 
-### 🔧 Code Quality & Refactoring
+### Code Quality & Refactoring
 
-**FileToJsonNode.node.ts** (Reduced by 78 lines):
-- ✅ **Eliminated CFB duplication**: Created `checkCFBFormat()` helper (was duplicated in DOC/PPT)
-- ✅ **Unified error handling**: Created `processViaOfficeParser()` for ODT/ODP/ODS (eliminated 3× duplication)
-- ✅ **Fixed PPTX error handling**: Added proper error handling (was missing)
-- ✅ **Cleaner code**: -78 lines without losing functionality
+**FileToJsonNode.node.ts** (-78 LOC):
+- **Removed CFB duplication** via `checkCFBFormat()` helper (DOC/PPT)
+- **Unified error handling** via `processViaOfficeParser()` for ODT/ODP/ODS
+- **Fixed PPTX error handling**
+- **Cleaner code** with 78 lines removed
 
-**errors.ts** (Enhanced with base class):
-- ✅ **DRY principle**: Created `BaseConverterError` class
-- ✅ **Better stack traces**: Added `Error.captureStackTrace` for debugging
-- ✅ **Full JSDoc**: Documented all error classes
+**errors.ts** (Base class):
+- Added `BaseConverterError`
+- Improved stack traces via `Error.captureStackTrace`
+- Full JSDoc coverage
 
-**helpers.ts** (Enhanced documentation):
-- ✅ **JSDoc added**: Complete documentation with @param, @returns, @throws
-- ✅ **Usage examples**: Added @example tags
-- ✅ **Better IntelliSense**: IDE autocomplete improved
+**helpers.ts** (Docs):
+- Added full JSDoc
+- Added examples
+- Better IntelliSense
 
-**icon.svg** (Fixed size):
-- ✅ **Correct dimensions**: 2048×1853 → 60×60 (n8n standard)
-- ✅ **Better visibility**: Icon now displays at proper size in n8n UI
+**icon.svg**:
+- Resized from 2048×1853 → 60×60 (n8n standard)
+- Improved visibility
 
-### 📚 Documentation
+### Documentation
 
-**README.md** (Complete redesign):
-- ✅ **Badges added**: npm version, tests, license, TypeScript
-- ✅ **Table of Contents**: Easy navigation with anchors
-- ✅ **Visual tables**: 12 comparison and feature tables
-- ✅ **XLSX section**: New multi-sheet processing documentation
-- ✅ **Collapsible details**: Better organized examples
-- ✅ **Updated stats**: 80 tests (was 73)
+**README.md** (Full redesign):
+- Added badges (npm, tests, license, TypeScript)
+- Added ToC and visual tables
+- Added XLSX section and collapsible examples
+- Updated stats (80 tests)
 
-### 🧪 Testing
+### Testing
 
-- **80 tests passing** (+7 new XLSX tests)
+- 80 tests passing (+7 XLSX tests)
 - New file: `test/integration/xlsx-sheets.test.ts`
-  - Multi-sheet handling tests
-  - Column letter conversion tests
-  - Size limiting tests (10K rows/sheet)
-  - Sparse data handling tests
-  - Output format verification tests
+  - Multi-sheet handling, column letters, row limits, sparse data, output verification
 
-### 📊 Code Quality Metrics
+### Code Quality Metrics
 
 | Metric | Before | After | Improvement |
 |--------|--------|-------|-------------|
-| **Code duplication** | 3 places | 0 | ✅ 100% eliminated |
-| **Lines of code** | 920 | 870 | ↓ 50 lines |
-| **Error handling coverage** | Incomplete | 100% | ✅ Fixed PPTX |
-| **Documentation** | Basic | Full JSDoc | ✅ Complete |
-| **Test coverage** | 73 tests | 80 tests | +7 tests |
+| **Code duplication** | 3 places | 0 | 100% removed |
+| **Lines of code** | 920 | 870 | 50 lines |
+| **Error handling coverage** | Partial | 100% | PPTX fixed |
+| **Documentation** | Basic | Full JSDoc | Complete |
+| **Test coverage** | 73 tests | 80 tests | +7 |
 
-### 🎯 Impact
+### Impact
 
-- **Users**: Better node naming, proper icon size
-- **Developers**: Cleaner codebase, easier to maintain
-- **Documentation**: Professional README with visual aids
-- **Quality**: Zero code duplication, full error handling
+- **Users**: Better naming, proper icon sizing
+- **Developers**: Cleaner codebase, easier maintenance
+- **Docs**: Professional README
+- **Quality**: Zero duplication, full error handling
 
-### 📋 Files Changed
+### Files Changed
 
 - `package.json`: Version bump to 1.0.22
-- `src/FileToJsonNode.node.ts`: -78 lines, +2 helper functions
-- `src/errors.ts`: Added BaseConverterError class
-- `src/helpers.ts`: Added full JSDoc documentation
-- `src/icon.svg`: Fixed dimensions (60×60)
-- `README.md`: Complete visual redesign
-- `test/integration/xlsx-sheets.test.ts`: +7 new tests
+- `src/FileToJsonNode.node.ts`: -78 lines, +2 helpers
+- `src/errors.ts`: Added BaseConverterError
+- `src/helpers.ts`: Full JSDoc
+- `src/icon.svg`: Fixed dimensions
+- `README.md`: Complete redesign
+- `test/integration/xlsx-sheets.test.ts`: +7 tests
 - `docs/README.md`: Updated node name
 - `docs/HTML_CONVERSION_PLAN.md`: Updated node name
 
@@ -201,6 +195,7 @@
 
 ## [1.0.21] - 2025-10-10
 
+### Major Feature: DOCX to HTML Conversion
 ### 🚀 Major Feature: DOCX to HTML Conversion
 
 - **NEW: Output Format Parameter** for DOCX files
@@ -399,15 +394,15 @@ the file genuinely has no `<w:t>` tags. Parser correctly returns empty text for 
 
 ## [1.0.18] - 2025-10-10
 
-### 🔒 Security & CI/CD
+### Security & CI/CD
 - **CRITICAL: Fixed CI/CD Pipeline Architecture**
   - Release workflow now depends on successful CI completion
-  - Added `needs: ci` to release job - release cannot start if CI fails
+  - Added `needs: ci` to release job — release cannot start if CI fails
   - Release now calls CI workflow via `workflow_call` to ensure checks run
   - Prevents publishing broken releases from commits that didn't pass CI
   - Removed duplicate lint/build/test steps from release workflow
 
-### 🏗️ Architecture Changes
+### Architecture Changes
 **Before (❌ UNSAFE):**
 ```
 Tag created → Release runs independently → Could publish broken code
@@ -420,107 +415,107 @@ Tag created → CI runs (lint/build/test) → [PASS] → Release publishes
                                      [FAIL] → Release blocked
 ```
 
-### 📋 Files Changed
-- `.github/workflows/release.yml`: 
+### Files Changed
+- `.github/workflows/release.yml`:
   - Added CI job that calls ci.yml workflow
   - Added `needs: ci` dependency to release job
   - Removed duplicate lint/test steps (now handled by CI)
   - Added `checks: write` permission
 
-### 🎯 Impact
-- **For Security**: Cannot accidentally publish broken code
-- **For CI/CD**: Follows proper gate-keeper pattern
-- **For Developers**: Release failures now clearly show CI step that failed
-- **Build Time**: No change - steps still run, but in correct order
+### Impact
+- **Security**: Cannot accidentally publish broken code
+- **CI/CD**: Proper gate-keeper pattern
+- **Developers**: Release failures now clearly show the failing CI step
+- **Build Time**: No change — steps still run, but in correct order
 
-### ⚠️ Breaking Change Note
-This is a CI/CD architecture fix, not a code change. No breaking changes for users.
+### Breaking Change Note
+CI/CD architecture fix only. No breaking runtime changes.
 
 ---
 
 ## [1.0.17] - 2025-10-10
 
-### 🔧 Code Quality
-- **ESLint Fixes**: Fixed all linter errors and warnings
-  - Removed unused `error` and `zipError` variables in catch blocks
-  - Fixed `any` type usage with proper type assertions and eslint-disable comments
-  - Removed unused function parameters (`_sheetId`, `_rowNumber`)
-  - Cleaned up unused eslint-disable directive in test/setup.ts
-  
+### Code Quality
+- **ESLint Fixes**: Cleared all linter errors/warnings
+  - Removed unused `error` and `zipError` variables
+  - Replaced `any` with typed assertions or eslint-disable blocks
+  - Removed unused parameters (`_sheetId`, `_rowNumber`)
+  - Cleaned unused eslint-disable in `test/setup.ts`
+ 
 - **CI/CD**: Added lint step to release workflow
-  - Release workflow now runs: Lint → Build → Test before publishing
-  - Prevents releases with code quality issues
+  - Release now runs: Lint → Build → Test before publishing
+  - Prevents releases with lint issues
   - CI workflow already had lint step
 
-### 📋 Files Changed
-- `src/FileToJsonNode.node.ts`: Fixed 6 eslint errors
-- `test/setup.ts`: Removed 1 eslint warning
+### Files Changed
+- `src/FileToJsonNode.node.ts`: Fixed 6 ESLint errors
+- `test/setup.ts`: Removed 1 ESLint warning
 - `.github/workflows/release.yml`: Added lint step
 
-### 🎯 Impact
-- **For Developers**: Code quality gates ensure clean releases
-- **For CI/CD**: No more releases with linter errors
+### Impact
+- **Developers**: Code quality gate ensures clean releases
+- **CI/CD**: No releases with lint errors
 
 ---
 
 ## [1.0.16] - 2025-10-10
 
-### 🚀 Features
-- **DOCX Parser Enhancement**: Added third-level fallback parser for non-standard DOCX files
-  - Now supports DOCX files created in ONLYOFFICE and other non-Microsoft applications
-  - Implements direct XML parsing from DOCX ZIP structure when standard parsers fail
-  - Three-tier parsing strategy: officeparser → mammoth → direct XML extraction
-  - Extracts text from `<w:t>` tags in word/document.xml
+### Features
+- **DOCX Parser Enhancement**: Added third-level fallback parser for non-standard DOCX
+  - Supports DOCX from ONLYOFFICE and other suites
+  - Direct XML parsing from DOCX ZIP when standard parsers fail
+  - Strategy: officeparser → mammoth → direct XML extraction
+  - Extracts `<w:t>` text from `word/document.xml`
 
-### 🐛 Bug Fixes
+### Bug Fixes
 - **ONLYOFFICE Compatibility**: Fixed "no extractable text" error for ONLYOFFICE-created DOCX files
   - Previously both officeparser and mammoth returned empty strings
   - Now successfully extracts text using direct ZIP/XML parsing
   - Maintains backward compatibility with standard Microsoft DOCX files
 
-### 📦 Dependencies
+### Dependencies
 - **Added**: `jszip@^3.10.1` - ZIP archive manipulation for DOCX parsing
 - **Added**: `@types/jszip@^3.4.1` (dev) - TypeScript definitions
 
-### 🔧 Technical Details
+### Technical Details
 - Enhanced DOCX strategy with recursive XML text extraction
 - Parser tries methods sequentially, returns first successful result
 - Only throws error if all three methods fail
 - Improved error message for truly corrupted/encrypted files
 
-### 📋 Files Changed
+### Files Changed
 - `src/FileToJsonNode.node.ts`: Enhanced DOCX processing with JSZip fallback
 - `package.json`: Added jszip dependency
 
-### 🎯 Impact
-- **For Users**: ONLYOFFICE and other alternative office suite files now work correctly
-- **For Developers**: More robust DOCX handling with graceful fallbacks
+### Impact
+- **Users**: ONLYOFFICE and other alternative office suite files now work correctly
+- **Developers**: More robust DOCX handling with graceful fallbacks
 - **Performance**: No impact - fallback only used when standard parsers fail
 
 ---
 
 ## [1.0.15] - 2025-10-10
 
-### 🐛 Bug Fixes
+### Bug Fixes
 - **Error Messages**: Fixed hardcoded file size limit in error message
   - `FileTooLargeError` now displays actual configured limit instead of always showing "50 MB"
   - Users can set custom limits up to 100 MB in node settings
   - Error message now dynamically shows: `"File is too large (maximum XX MB)"` where XX is the configured value
   - Example: If limit set to 80 MB, error will show "maximum 80 MB" instead of "maximum 50 MB"
 
-### 🔧 Technical Details
+### Technical Details
 - Modified error throw statement in line 735 to use dynamic `maxFileSize` parameter
 - No functional changes to size validation logic - it already worked correctly
 - Purely cosmetic fix to improve user experience and clarity
 
-### 📋 Files Changed
+### Files Changed
 - `src/FileToJsonNode.node.ts`: Updated FileTooLargeError message to be dynamic
 
 ---
 
 ## [1.0.14] - 2025-10-10
 
-### 🐛 Critical Bug Fixes
+### Critical Bug Fixes
 - **Error Handling**: Fixed major error propagation issues
   - Removed double-wrapping of errors that caused message duplication
   - Specialized error types (`UnsupportedFormatError`, `EmptyFileError`, etc.) now properly preserved
@@ -537,30 +532,30 @@ This is a CI/CD architecture fix, not a code change. No breaking changes for use
   - Corrected `NodeConnectionType` → `NodeConnectionTypes` import from n8n-workflow
   - Resolved TypeScript linter errors about types used as values
 
-### 🔒 Security
+### Security
 - **Dependencies**: Fixed critical vulnerability in `form-data`
   - Added `overrides` section to force `form-data@>=4.0.4` 
   - Resolves GHSA-fjxv-7rqg-78g4 (unsafe random boundary generation)
   - Zero breaking changes - uses npm overrides feature
 
-### 📚 Documentation
+### Documentation
 - **Error Handling Analysis**: Added comprehensive documentation
   - Created `docs/error-handling-issues.md` with detailed problem analysis
   - Documented all 5 identified issues with before/after code examples
   - Included testing results and impact assessment
 
-### ✅ Testing & Quality
+### Testing & Quality
 - All 60 tests passing
 - ESLint clean (0 errors, 1 pre-existing warning)
 - TypeScript compilation successful
 - Zero security vulnerabilities after fixes
 
-### 🎯 Impact
-- **For Users**: Clear, non-duplicated error messages with proper error types
-- **For Developers**: Cleaner codebase, better error handling patterns, improved type safety
+### Impact
+- **Users**: Clear, non-duplicated error messages with proper error types
+- **Developers**: Cleaner codebase, better error handling patterns, improved type safety
 - **Performance**: Eliminated unnecessary try-catch overhead in Excel processing
 
-### 🔧 Technical Details
+### Technical Details
 - Modified error catching logic in main execute method (lines 772-783)
 - Refactored XLSX strategy to remove control-flow exceptions (lines 478-499)
 - Enhanced PDF fallback to capture both error contexts (lines 508-524)
@@ -571,7 +566,7 @@ This is a CI/CD architecture fix, not a code change. No breaking changes for use
 
 ## [1.0.12] - 2025-10-09
 
-### 🐛 Bug Fixes & Improvements
+### Bug Fixes & Improvements
 - **Error Diagnostics**: Dramatically improved error message for EmptyFileError
   - Now shows file name, format, and size in error message
   - Lists 4 possible reasons why file might appear empty
@@ -583,7 +578,7 @@ This is a CI/CD architecture fix, not a code change. No breaking changes for use
   - Explicit handling of empty text results from parsers
   - Better debugging information for troubleshooting
 
-### 📚 Documentation
+### Documentation
 - **TROUBLESHOOTING_EMPTY_FILE.md**: Complete guide for diagnosing empty file errors
   - 5 common reasons for empty file errors with solutions
   - Step-by-step diagnostic procedures
@@ -595,12 +590,12 @@ This is a CI/CD architecture fix, not a code change. No breaking changes for use
   - Testing procedures for verification
   - Known issues vs actual bugs clarification
 
-### 🎯 Impact
+### Impact
 - **User Experience**: Users now understand why processing failed and how to fix it
 - **Developer Experience**: Easier to diagnose parser issues with detailed error messages
 - **Support Reduction**: Self-service troubleshooting reduces support requests
 
-### 🔧 Technical Details
+### Technical Details
 - Modified `strategies.docx` to explicitly handle empty strings
 - Enhanced `EmptyFileError` throw location with contextual information
 - No breaking changes - purely diagnostic improvements
@@ -609,7 +604,7 @@ This is a CI/CD architecture fix, not a code change. No breaking changes for use
 
 ## [1.0.11.1] - 2025-01-27
 
-### 🔧 Bug Fixes
+### Bug Fixes
 - **GitHub Actions**: Fixed permissions error in release workflow
   - Added `checks: write` permission to release.yml
   - Resolves workflow error when calling ci.yml from release.yml
@@ -620,7 +615,7 @@ This is a CI/CD architecture fix, not a code change. No breaking changes for use
   - Added eslint-disable comments for test files where needed
 - **Build**: All tests passing (60/60) and linter clean
 
-### 📝 Technical Details
+### Technical Details
 - Enhanced type safety for YML processing functions
 - Improved code maintainability and IDE support
 - No functional changes - purely technical improvements
@@ -629,7 +624,7 @@ This is a CI/CD architecture fix, not a code change. No breaking changes for use
 
 ## [1.0.11] - 2025-01-27
 
-### ✨ New Features
+### New Features
 - **YML Support**: Added comprehensive support for YML file format
   - Specialized processing for Yandex Market catalog files (yml_catalog format)
   - Structured JSON output with sections: shop_info, currencies, categories, offers, statistics
@@ -638,13 +633,13 @@ This is a CI/CD architecture fix, not a code change. No breaking changes for use
   - Support for product parameters, images, delivery options
   - Performance optimized for typical catalog sizes with warnings for large datasets
 
-### 📄 Technical Implementation
+### Technical Implementation
 - Added `processYandexMarketYml` function for specialized YML processing
 - Enhanced file type detection and processing strategies
 - Comprehensive test coverage with integration and unit tests
 - Updated documentation with YML examples and usage guidelines
 
-### 📁 Files Added/Modified
+### Files Added/Modified
 - `src/FileToJsonNode.node.ts`: Added YML processing strategy
 - `test/samples/sample_yandex_market.yml`: Sample YML test file
 - `test/integration/yml-integration.test.ts`: Integration tests
@@ -652,7 +647,7 @@ This is a CI/CD architecture fix, not a code change. No breaking changes for use
 - `docs/yml_support.md`: Comprehensive YML documentation
 - `README.md`: Updated with YML support information
 
-### 🎯 Impact
+### Impact
 - Users can now process Yandex Market catalog files with structured output
 - Enhanced data extraction capabilities for e-commerce integrations
 - Backward compatible - no breaking changes
@@ -661,21 +656,21 @@ This is a CI/CD architecture fix, not a code change. No breaking changes for use
 
 ## [1.0.10] - 2025-06-20
 
-### 🐛 Bug Fixes
+### Bug Fixes
 - **Critical**: Fixed support for ODT, ODP, ODS, and JSON file formats
   - Added missing format extensions to supported formats list
   - Resolves "Unsupported file type" error for these formats
   - Format processing strategies were already implemented but not accessible
 
-### 📋 Technical Details
+### Technical Details
 - Added `odt`, `odp`, `ods`, `json` to the `supported` array in FileToJsonNode
 - All format handlers were previously implemented in the `strategies` object
 - This was a configuration oversight that prevented format recognition
 
-### 🔧 Files Changed
+### Files Changed
 - `src/FileToJsonNode.node.ts`: Updated supported formats array
 
-### 🎯 Impact
+### Impact
 - Users can now successfully process OpenDocument formats (ODT, ODP, ODS)
 - JSON files are now properly recognized and processed
 - No breaking changes - purely additive fix
@@ -684,13 +679,13 @@ This is a CI/CD architecture fix, not a code change. No breaking changes for use
 
 ## [1.0.9] - 2025-06-20
 
-### 🐛 Bug Fixes
+### Bug Fixes
 - **CI/CD**: Fixed Jest parameter compatibility issues
   - Updated `--testPathPattern` to `--testPathPatterns` in all CI commands
   - Resolves Jest 30+ compatibility problems
   - All CI tests now pass successfully
 
-### 🔧 Files Changed
+### Files Changed
 - `.github/workflows/ci.yml`: Updated Jest command parameters
 
 ---
