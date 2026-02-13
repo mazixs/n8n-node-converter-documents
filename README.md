@@ -28,7 +28,7 @@
 | Category | Formats | Details |
 |----------|---------|---------|
 | **Documents** | DOCX, DOC, ODT, TXT, PDF | Text, HTML, or Markdown output for DOCX |
-| **Spreadsheets** | XLSX, ODS, CSV | Multi-sheet, configurable delimiter |
+| **Spreadsheets** | XLSX, ODS, CSV | Multi-sheet parsing for XLSX/ODS and CSV |
 | **Presentations** | PPTX, PPT, ODP | Text extraction |
 | **Web & Data** | HTML, HTM, XML, JSON | Structure-aware parsing |
 | **E-commerce** | YML (Yandex Market) | Specialized shop/offers/categories parsing |
@@ -52,7 +52,6 @@
 - Fallback chains: DOCX uses officeparser -> mammoth, DOC/PPT uses CFB signature check + officeparser
 - File name sanitization (path traversal protection)
 - Configurable file size limits (up to 100MB)
-- Max Excel rows parameter (prevents OOM on large files)
 - Custom error classes with descriptive messages
 
 ---
@@ -96,10 +95,8 @@ npm run build
 |-----------|---------|-------------|
 | **Binary Property** | `data` | Name of the binary property with the file |
 | **Output Format (DOCX)** | `text` | `text`, `html`, or `markdown` (GFM with tables) |
-| **CSV Delimiter** | `auto` | Auto, `,`, `;`, `\t`, `\|` |
-| **Max Excel Rows** | `0` | Rows per sheet limit (0 = unlimited) |
 | **Max File Size (MB)** | `50` | File size limit |
-| **Concurrency** | `3` | Parallel file processing |
+| **Max Concurrency** | `4` | Parallel file processing |
 
 ---
 
@@ -255,7 +252,7 @@ npm run test:coverage # Coverage report
 | **Legacy XLS** | Binary Excel not supported, convert to XLSX |
 | **file-type** | Pinned to v16.5.4 (last CJS version, v17+ is ESM-only) |
 | **Scanned PDFs** | Image-based PDFs return empty text (no OCR) |
-| **Large files** | PDF/XLSX load into RAM; use Max File Size / Max Rows to control |
+| **Large files** | PDF/XLSX load into RAM; use Max File Size to control |
 
 ---
 

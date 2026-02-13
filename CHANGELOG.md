@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.2.1] - 2026-02-13
+
+### Fixed
+
+- **Format Detection Whitelist**: Added missing `yml` and `ppt` to `SUPPORTED_FORMATS`.
+  - Prevents false `Unsupported file type` errors for valid YML/PPT inputs.
+  - Keeps extension whitelist aligned with implemented strategies.
+
+### Documentation
+
+- **README sync with actual node parameters**:
+  - Removed obsolete `CSV Delimiter` and `Max Excel Rows` parameters.
+  - Updated concurrency parameter to `Max Concurrency` with default `4`.
+  - Updated large file limitation text to reference `Max File Size` only.
+
+### Release
+
+- Bumped package version to `1.2.1` in:
+  - `package.json`
+  - `package-lock.json` (root package entries)
+
 ## [1.2.0] - 2025-06-25
 
 ### Major Refactoring
@@ -76,7 +97,7 @@
 | Metric | Before (1.1.2) | After (1.2.0) |
 |--------|----------------|---------------|
 | FileToJsonNode.node.ts | 930 LOC | ~220 LOC |
-| Production deps | 11 | 8 |
+| Production deps | 11 | 9 |
 | Dev deps | 25 | 12 |
 | Code duplication | 5 spots | 0 |
 | Modules in `src/` | 4 files | 9 files (4 dirs) |

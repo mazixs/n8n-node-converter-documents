@@ -30,8 +30,8 @@ import { strategies } from "./strategies";
 import type { JsonResult, JsonTextResult } from "./types";
 
 const SUPPORTED_FORMATS = [
-  "doc", "docx", "xml", "xlsx", "csv", "pdf",
-  "txt", "pptx", "html", "htm", "odt", "odp", "ods", "json",
+  "doc", "docx", "xml", "yml", "xlsx", "csv", "pdf",
+  "txt", "ppt", "pptx", "html", "htm", "odt", "odp", "ods", "json",
 ];
 
 /**
