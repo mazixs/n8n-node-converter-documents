@@ -1,67 +1,33 @@
-// Тестируем processHtml через стратегию html
-import { parse as parseHtml } from 'node-html-parser';
+import { strategies } from '../../src/strategies';
+import type { JsonResult } from '../../src/types';
 
-jest.mock('node-html-parser');
-
-const mockParseHtml = parseHtml as jest.MockedFunction<typeof parseHtml>;
-
-// Тестовая версия processHtml на основе новой логики
-async function processHtml(buf: Buffer): Promise<{ text: string }> {
-  const root = parseHtml(buf.toString("utf8"));
-  const body = root.querySelector("body");
-  const cleanText = body ? body.textContent.replace(/\s+/g, " ").trim() : "";
-  return { text: cleanText };
+function getTextResult(result: Partial<JsonResult>): string {
+  if (!('text' in result) || typeof result.text !== 'string') {
+    throw new Error('Expected strategy to return text result');
+  }
+  return result.text;
 }
 
-describe('processHtml', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
+describe('html/htm strategies', () => {
+  it('should extract text from HTML body and normalize whitespace', async () => {
+    const htmlContent = '<html><body><h1>Hello</h1>\n\n<p>World</p></body></html>';
+    const result = await strategies.html(Buffer.from(htmlContent, 'utf8'));
+
+    expect(getTextResult(result)).toBe('Hello World');
   });
 
-  it('should extract text from HTML body', async () => {
-    const htmlContent = `<html><body><h1>Hello</h1><p>World</p></body></html>`;
-    const buffer = Buffer.from(htmlContent, 'utf8');
-    
-    mockParseHtml.mockReturnValue({
-      querySelector: jest.fn().mockReturnValue({
-        textContent: 'Hello World ',
-      }),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
-
-    const result = await processHtml(buffer);
-    
-    expect(result.text).toBe('Hello World');
-    expect(mockParseHtml).toHaveBeenCalledWith(htmlContent);
-  });
-
-  it('should handle empty HTML body', async () => {
-    const htmlContent = '<html><body></body></html>';
-    const buffer = Buffer.from(htmlContent, 'utf8');
-    
-    mockParseHtml.mockReturnValue({
-      querySelector: jest.fn().mockReturnValue({
-        textContent: '',
-      }),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
-
-    const result = await processHtml(buffer);
-    
-    expect(result.text).toBe('');
-  });
-
-  it('should handle missing body tag', async () => {
+  it('should return empty string when body is missing', async () => {
     const htmlContent = '<div>No body</div>';
-    const buffer = Buffer.from(htmlContent, 'utf8');
-    
-    mockParseHtml.mockReturnValue({
-      querySelector: jest.fn().mockReturnValue(null),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    const result = await strategies.html(Buffer.from(htmlContent, 'utf8'));
 
-    const result = await processHtml(buffer);
-    
-    expect(result.text).toBe('');
+    expect(getTextResult(result)).toBe('');
+  });
+
+  it('htm strategy should behave the same as html', async () => {
+    const htmlContent = '<html><body><p>Same parser</p></body></html>';
+    const htmlResult = await strategies.html(Buffer.from(htmlContent, 'utf8'));
+    const htmResult = await strategies.htm(Buffer.from(htmlContent, 'utf8'));
+
+    expect(getTextResult(htmResult)).toBe(getTextResult(htmlResult));
   });
 });

@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.2.2] - 2026-02-14
+
+### Tests
+
+- **Test Architecture Refactoring**: Tests now exercise real `src/` code instead of local re-implementations.
+  - `strategies.test.ts` — imports and tests actual `strategies` from `src/strategies/index.ts` (json, xml, html, pdf, doc, odt).
+  - `processHtml.test.ts` — replaced local `processHtml` copy with real `strategies.html`/`strategies.htm` calls.
+  - New `FileToJsonNode.execute.test.ts` — unit test for the node's `execute()` pipeline with mocked `IExecuteFunctions` context (txt processing, docx outputFormat passthrough, file-type autodetect, UnsupportedFormatError, EmptyFileError).
+- **Coverage Quality Gate**: Added `coverageThreshold` to `jest.config.js`:
+  - Global: 35% statements / 25% branches / 35% functions.
+  - `FileToJsonNode.node.ts`: 50% statements / 30% branches / 60% functions.
+  - `strategies/index.ts`: 30% statements / 15% branches / 20% functions.
+
+### Release
+
+- Bumped package version to `1.2.2` in:
+  - `package.json`
+  - `package-lock.json` (root package entries)
+
 ## [1.2.1] - 2026-02-13
 
 ### Fixed
@@ -21,7 +40,7 @@
   - `package.json`
   - `package-lock.json` (root package entries)
 
-## [1.2.0] - 2025-06-25
+## [1.2.0] - 2026-02-08
 
 ### Major Refactoring
 
