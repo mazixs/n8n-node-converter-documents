@@ -17,6 +17,12 @@ Lint → Build → Test → Security Audit
 
 > **npm publish is done manually.**
 
+### 3. npm Publish (`publish-npm.yml`)
+
+**Trigger:** manual workflow dispatch with an existing release version.
+
+Checks out the matching `vX.Y.Z` tag, verifies the package version, runs lint/build/tests, and publishes through the repository `NPM_TOKEN` secret.
+
 ## How to release
 
 ```bash
@@ -28,8 +34,8 @@ git push origin main --follow-tags
 
 # 3. Wait for CI + GitHub Release
 
-# 4. Publish to npm manually
-npm publish --access public
+# 4. Run the "Publish to npm" workflow with the released version
+gh workflow run publish-npm.yml -f version=1.2.3
 ```
 
 ## Local verification
