@@ -37,3 +37,6 @@ coverage/
 *.temp
 .cache/
 nul
+
+# Isolated development worktrees
+.worktrees/
