@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.3] - 2026-07-12
+
+### Fixed
+
+- **PDF worker compatibility**: pinned `officeparser` to `6.0.4` instead of the floating `^6.0.4` range.
+  - Prevents clean installations from resolving OfficeParser 6.1.x with a different `pdfjs-dist` API/worker combination.
+  - Fixes PDF processing failures reporting mismatched PDF.js API and worker versions.
+
+### Tests
+
+- Added a dependency regression test that rejects floating `officeparser` versions.
+- Added a real-file PDF extraction test executed in a normal Node.js process.
+
 ## [1.2.2] - 2026-02-14
 
 ### Tests
@@ -732,4 +745,4 @@ CI/CD architecture fix only. No breaking runtime changes.
 
 ## Previous Versions
 
-For changes in versions 1.0.8 and earlier, please see the [GitHub releases page](https://github.com/mazixs/n8n-node-converter-documents/releases). 
+For changes in versions 1.0.8 and earlier, please see the [GitHub releases page](https://github.com/mazixs/n8n-node-converter-documents/releases).
