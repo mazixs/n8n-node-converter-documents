@@ -1,7 +1,6 @@
 // Мокаем внешние зависимости для контролируемого тестирования
 jest.mock('../../src/helpers', () => ({
   extractViaOfficeParser: jest.fn(),
-  limitExcelSheet: jest.fn((data) => data),
 }));
 
 jest.mock('fast-xml-parser', () => ({

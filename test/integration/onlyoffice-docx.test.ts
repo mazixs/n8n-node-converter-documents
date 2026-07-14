@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 import mammoth from 'mammoth';
-import { extractViaOfficeParser } from '../../src/helpers';
 
 describe('ONLYOFFICE DOCX Integration Test', () => {
   it('should extract text from ONLYOFFICE DOCX file without XML namespaces', async () => {
@@ -40,10 +40,17 @@ describe('ONLYOFFICE DOCX Integration Test', () => {
       return;
     }
 
-    const buffer = fs.readFileSync(filePath);
-    
-    // officeparser обрабатывает TextBox/shapes через DrawingML
-    const extractedText = await extractViaOfficeParser(buffer);
+    const script = [
+      "const fs = require('fs');",
+      "const { parseOffice } = require('officeparser');",
+      "parseOffice(fs.readFileSync(process.argv[1]))",
+      "  .then((ast) => process.stdout.write(ast.toText()))",
+      "  .catch((error) => { console.error(error); process.exit(1); });",
+    ].join('\n');
+    const extractedText = execFileSync(process.execPath, ['-e', script, filePath], {
+      cwd: path.resolve(__dirname, '../..'),
+      encoding: 'utf8',
+    });
     
     console.log('\n=== TEXTBOX TEST ===');
     console.log('Extracted:', extractedText);

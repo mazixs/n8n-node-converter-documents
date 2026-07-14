@@ -1,34 +1,28 @@
 /**
- * Promise pool для ограничения количества одновременных задач
- * Использует Set вместо Array для корректного удаления (fix race condition)
+ * Promise pool для ограничения количества одновременных задач.
+ * Сохраняет порядок результатов независимо от порядка завершения задач.
  */
 export async function promisePool<T, R>(
   items: T[],
   worker: (item: T, index: number) => Promise<R>,
   concurrency: number
 ): Promise<R[]> {
-  const results: R[] = [];
-  let i = 0;
-  const executing = new Set<Promise<void>>();
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
+    throw new RangeError('Concurrency must be a positive integer');
+  }
 
-  async function enqueue() {
-    if (i >= items.length) return;
-    const currentIndex = i++;
-    const p = worker(items[currentIndex], currentIndex).then((res) => {
-      results[currentIndex] = res;
-    });
-    const wrapped = p.then(() => {
-      executing.delete(wrapped);
-    });
-    executing.add(wrapped);
-    if (executing.size < concurrency) {
-      await enqueue();
-    } else {
-      await Promise.race(executing);
-      await enqueue();
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function runWorker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await worker(items[currentIndex], currentIndex);
     }
   }
-  await enqueue();
-  await Promise.all(executing);
+
+  const workerCount = Math.min(concurrency, items.length);
+  await Promise.all(Array.from({ length: workerCount }, runWorker));
   return results;
 }

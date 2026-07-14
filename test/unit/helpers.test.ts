@@ -1,4 +1,4 @@
-import { extractViaOfficeParser, limitExcelSheet } from '../../src/helpers';
+import { extractViaOfficeParser } from '../../src/helpers';
 
 // Mock officeparser module (v6 API: parseOffice returns AST with toText())
 jest.mock('officeparser', () => ({
@@ -11,37 +11,6 @@ const mockParseOffice = parseOffice as jest.MockedFunction<typeof parseOffice>;
 describe('helpers', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-  });
-
-  describe('limitExcelSheet', () => {
-    it('should return sheet as is if under limit', () => {
-      const testData = [{ name: 'test1' }, { name: 'test2' }];
-      const result = limitExcelSheet(testData, 10);
-      
-      expect(result).toEqual(testData);
-      expect(result).toHaveLength(2);
-    });
-
-    it('should limit sheet when over maxRows', () => {
-      const testData = Array.from({ length: 15 }, (_, i) => ({ name: `test${i}` }));
-      const result = limitExcelSheet(testData, 10);
-      
-      expect(result).toHaveLength(10);
-      expect(result[0]).toEqual({ name: 'test0' });
-      expect(result[9]).toEqual({ name: 'test9' });
-    });
-
-    it('should handle empty array', () => {
-      const result = limitExcelSheet([], 10);
-      expect(result).toEqual([]);
-    });
-
-    it('should return all rows if maxRows is 0', () => {
-      const testData = Array.from({ length: 5 }, (_, i) => ({ name: `test${i}` }));
-      const result = limitExcelSheet(testData, 0);
-      
-      expect(result).toEqual(testData);
-    });
   });
 
   describe('extractViaOfficeParser', () => {

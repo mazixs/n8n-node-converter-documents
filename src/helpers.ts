@@ -14,18 +14,3 @@ export async function extractViaOfficeParser(
   const ast = await parseOffice(buffer);
   return ast.toText();
 }
-
-/**
- * Ограничивает количество строк в Excel-таблице
- * 
- * @param sheet - Массив строк из Excel
- * @param maxRows - Максимальное количество строк (0 = без лимита)
- * @returns Ограниченный массив строк
- */
-export function limitExcelSheet(
-  sheet: unknown[],
-  maxRows: number
-): unknown[] {
-  if (maxRows <= 0) return sheet;
-  return sheet.length > maxRows ? sheet.slice(0, maxRows) : sheet;
-}

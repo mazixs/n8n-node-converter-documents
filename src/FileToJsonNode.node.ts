@@ -1,14 +1,14 @@
 /*
- * Convert File to JSON v6
+ * Convert File to JSON
  * ─────────────────────────────────────────────────────────
  * Универсальный кастом-нод для n8n.
- * Поддерживает: DOC, DOCX, XML, XLS, XLSX, CSV, PDF, TXT,
+ * Поддерживает: DOC, DOCX, XML, YML, XLSX, CSV, PDF, TXT,
  *               PPT, PPTX, HTML / HTM, ODT, ODP, ODS, JSON.
  * Выход: { text: "..."} либо { sheets: {...} } + metadata.
  */
 
 import path from "path";
-import { fromBuffer as fileTypeFromBuffer } from "file-type";
+import { fileTypeFromBuffer } from "file-type";
 
 import {
   IExecuteFunctions,
@@ -27,12 +27,24 @@ import {
 } from "./errors";
 import { sanitizeFileName, promisePool } from "./utils";
 import { strategies } from "./strategies";
-import type { JsonResult, JsonTextResult } from "./types";
+import type { DocxOutputFormat, JsonResult, StrategyResult } from "./types";
 
-const SUPPORTED_FORMATS = [
-  "doc", "docx", "xml", "yml", "xlsx", "csv", "pdf",
-  "txt", "ppt", "pptx", "html", "htm", "odt", "odp", "ods", "json",
-];
+function isSupportedFormat(extension: string): extension is keyof typeof strategies {
+  return Object.prototype.hasOwnProperty.call(strategies, extension);
+}
+
+function isStrategyResult(value: unknown): value is StrategyResult {
+  if (!value || typeof value !== 'object') return false;
+
+  const result = value as Record<string, unknown>;
+  const hasText = typeof result.text === 'string';
+  const hasSheets = Boolean(
+    result.sheets && typeof result.sheets === 'object' && !Array.isArray(result.sheets),
+  );
+  const hasValidWarning = result.warning === undefined || typeof result.warning === 'string';
+
+  return hasValidWarning && hasText !== hasSheets;
+}
 
 /**
  * Custom n8n node: convert files to JSON/text
@@ -145,14 +157,11 @@ export class FileToJsonNode implements INodeType {
       let ext = path.extname(name).slice(1).toLowerCase();
 
       /* ── autodetect ── */
-      if (!ext || !SUPPORTED_FORMATS.includes(ext)) {
+      if (!isSupportedFormat(ext)) {
+        let detectedExtension: string | undefined;
         try {
           const ft = await fileTypeFromBuffer(buf);
-          if (ft?.ext && SUPPORTED_FORMATS.includes(ft.ext)) {
-            ext = ft.ext;
-          } else {
-            throw new UnsupportedFormatError(`Unsupported file type: ${ext || "unknown"}`);
-          }
+          detectedExtension = ft?.ext;
         } catch (error) {
           this.logger?.warn('File type detection failed', { 
             fileName: name, 
@@ -160,6 +169,11 @@ export class FileToJsonNode implements INodeType {
           });
           throw new UnsupportedFormatError(`Unsupported file type: ${ext || "unknown"}`);
         }
+
+        if (!detectedExtension || !isSupportedFormat(detectedExtension)) {
+          throw new UnsupportedFormatError(`Unsupported file type: ${ext || "unknown"}`);
+        }
+        ext = detectedExtension;
       }
 
       this.logger?.info("ConvertFileToJSON →", {
@@ -168,16 +182,19 @@ export class FileToJsonNode implements INodeType {
         size: buf.length,
       });
 
-      let json: Partial<JsonResult> = {};
       const startTime = performance.now();
-      
-      const outputFormat = this.getNodeParameter('outputFormat', i, 'text') as string;
+      let strategyResult: StrategyResult;
+      const strategy = isSupportedFormat(ext) ? strategies[ext] : undefined;
+
+      if (!strategy) {
+        throw new UnsupportedFormatError(`Format "${ext}" is not supported`);
+      }
       
       try {
-        if (!strategies[ext]) {
-          throw new UnsupportedFormatError(`Format "${ext}" is not supported`);
-        }
-        json = await strategies[ext](buf, ext, ext === 'docx' ? { outputFormat } : undefined);
+        const options = ext === 'docx'
+          ? { outputFormat: this.getNodeParameter('outputFormat', i, 'text') as DocxOutputFormat }
+          : undefined;
+        strategyResult = await strategy(buf, ext, options);
       } catch (e) {
         if (e instanceof FileTypeError ||
             e instanceof FileTooLargeError ||
@@ -186,21 +203,16 @@ export class FileToJsonNode implements INodeType {
             e instanceof ProcessingError) {
           throw e;
         }
-        throw new ProcessingError(`${ext.toUpperCase()} processing error: ${(e as Error).message}`);
+        throw new ProcessingError(
+          `${ext.toUpperCase()} processing error: ${e instanceof Error ? e.message : String(e)}`,
+        );
       }
-      
-      const processingTime = performance.now() - startTime;
-      this.logger?.info('Processing completed', { 
-        file: name, 
-        size: buf.length, 
-        time: `${processingTime.toFixed(2)}ms`, 
-        type: ext
-      });
 
-      if (
-        "text" in json &&
-        (!(json as JsonTextResult).text || (json as JsonTextResult).text.trim().length === 0)
-      ) {
+      if (!isStrategyResult(strategyResult)) {
+        throw new ProcessingError(`${ext.toUpperCase()} processing error: strategy returned an invalid result`);
+      }
+
+      if ("text" in strategyResult && strategyResult.text.trim().length === 0) {
         throw new EmptyFileError(
           `File "${name}" (${ext.toUpperCase()}, ${(buf.length / 1024).toFixed(2)} KB) contains no extractable text. ` +
           `Possible reasons: (1) File contains only images/graphics without text, ` +
@@ -211,15 +223,26 @@ export class FileToJsonNode implements INodeType {
         );
       }
 
-      json.metadata = {
-        fileName: sanitizeFileName(name) || null,
-        fileSize: buf.length,
-        fileType: ext,
-        processedAt: new Date().toISOString(),
-      };
+      const json = {
+        ...strategyResult,
+        metadata: {
+          fileName: name || null,
+          fileSize: buf.length,
+          fileType: ext,
+          processedAt: new Date().toISOString(),
+        },
+      } as JsonResult;
+
+      const processingTime = performance.now() - startTime;
+      this.logger?.info('Processing completed', {
+        file: name,
+        size: buf.length,
+        time: `${processingTime.toFixed(2)}ms`,
+        type: ext,
+      });
 
       return {
-        json: json as INodeExecutionData['json'],
+        json: json as unknown as INodeExecutionData['json'],
         pairedItem: { item: i },
       };
     };
@@ -231,7 +254,8 @@ export class FileToJsonNode implements INodeType {
         files: results.map(result => result.json),
         totalFiles: results.length,
         processedAt: new Date().toISOString()
-      }
+      },
+      pairedItem: items.map((_item, item) => ({ item })),
     }]];
   }
 }

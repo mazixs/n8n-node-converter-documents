@@ -1,6 +1,6 @@
 import { XMLParser } from 'fast-xml-parser';
 import { processYandexMarketYml } from '../../src/processors/yml';
-import type { JsonTextResult } from '../../src/types';
+import type { YmlCatalog } from '../../src/types';
 
 describe('YML Processor Unit Tests', () => {
   const sampleYmlXml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -54,7 +54,7 @@ describe('YML Processor Unit Tests', () => {
   test('should process YML structure correctly', () => {
     const parser = new XMLParser({ ignoreAttributes: false });
     const parsed = parser.parse(sampleYmlXml);
-    const result = processYandexMarketYml(parsed) as Partial<JsonTextResult>;
+    const result = processYandexMarketYml(parsed);
     
     expect(result.text).toBeDefined();
     const catalog = JSON.parse(result.text!).yandex_market_catalog;
@@ -112,7 +112,7 @@ describe('YML Processor Unit Tests', () => {
     
     const parser = new XMLParser({ ignoreAttributes: false });
     const parsed = parser.parse(minimalYml);
-    const result = processYandexMarketYml(parsed) as Partial<JsonTextResult>;
+    const result = processYandexMarketYml(parsed);
     
     const catalog = JSON.parse(result.text!).yandex_market_catalog;
     expect(catalog.shop_info.name).toBe('Test Shop');
@@ -127,5 +127,39 @@ describe('YML Processor Unit Tests', () => {
   test('should throw ProcessingError on invalid input', () => {
     expect(() => processYandexMarketYml({} as never))
       .toThrow('YML catalog processing error');
+  });
+
+  test('should preserve numeric and boolean falsey values', () => {
+    const parsed = {
+      yml_catalog: {
+        shop: {
+          name: 'Falsey Shop',
+          currencies: { currency: { id: 0, rate: 0 } },
+          offers: {
+            offer: {
+              id: 0,
+              available: false,
+              price: 0,
+              delivery: false,
+              'delivery-options': { option: { cost: 0, days: 0 } },
+            },
+          },
+        },
+      },
+    } as unknown as YmlCatalog;
+
+    const result = processYandexMarketYml(parsed);
+    const catalog = JSON.parse(result.text).yandex_market_catalog;
+
+    expect(catalog.currencies[0]).toEqual({ id: 0, rate: 0 });
+    expect(catalog.offers[0]).toEqual(expect.objectContaining({
+      id: 0,
+      available: false,
+      price: 0,
+      delivery: false,
+    }));
+    expect(catalog.offers[0].deliveryOptions[0]).toEqual(expect.objectContaining({ cost: 0, days: 0 }));
+    expect(catalog.statistics.available_offers).toBe(0);
+    expect(catalog.statistics.unavailable_offers).toBe(1);
   });
 });

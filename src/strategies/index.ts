@@ -1,14 +1,12 @@
 import { XMLParser } from "fast-xml-parser";
 import mammoth from "mammoth";
-import readXlsxFile from "read-excel-file/node";
+import readXlsxFile, { readSheetNames } from "read-excel-file/node";
 import { parse as parseHtml } from "node-html-parser";
 import chardet from "chardet";
 import Papa from "papaparse";
-import * as readline from "readline";
-import { Readable } from "stream";
 import { NodeHtmlMarkdown } from "node-html-markdown";
 
-import { extractViaOfficeParser, limitExcelSheet } from "../helpers";
+import { extractViaOfficeParser } from "../helpers";
 import {
   UnsupportedFormatError,
   ProcessingError,
@@ -16,7 +14,7 @@ import {
 import { numberToColumn } from "../utils/columns";
 import { flattenJsonObject } from "../utils/flatten";
 import { processYandexMarketYml } from "../processors/yml";
-import type { JsonResult, StrategyFn } from "../types";
+import type { StrategyFn, StrategyResult } from "../types";
 
 // Константы
 const CSV_STREAM_ROW_LIMIT = 100000;
@@ -25,46 +23,41 @@ const TXT_STREAM_CHAR_LIMIT = 1_000_000; // 1 млн символов
 
 // --- Вспомогательные функции ---
 
-async function streamTxtStrategy(buf: Buffer): Promise<Partial<JsonResult>> {
-  return new Promise((resolve, reject) => {
-    const rl = readline.createInterface({
-      input: Readable.from(buf.toString("utf8")),
-      crlfDelay: Infinity,
-    });
-    let text = "";
-    let truncated = false;
-    rl.on("line", (line: string) => {
-      if (text.length < TXT_STREAM_CHAR_LIMIT) {
-        text += line + "\n";
-      } else {
-        truncated = true;
-      }
-    });
-    rl.on("close", () => {
-      resolve({
-        text: truncated ? text.slice(0, TXT_STREAM_CHAR_LIMIT) : text,
-        warning: truncated ? `Текст обрезан до ${TXT_STREAM_CHAR_LIMIT} символов` : undefined,
-      });
-    });
-    rl.on("error", (err: Error) => reject(err));
-  });
+function decodeBuffer(buf: Buffer): string {
+  const detected = chardet.detect(buf) || 'utf-8';
+  try {
+    return new TextDecoder(detected).decode(buf);
+  } catch {
+    return buf.toString('utf8');
+  }
 }
 
-async function streamCsvStrategy(data: string): Promise<Partial<JsonResult>> {
+async function largeTxtStrategy(buf: Buffer): Promise<StrategyResult> {
+  const text = decodeBuffer(buf);
+  const truncated = text.length > TXT_STREAM_CHAR_LIMIT;
+  return {
+    text: truncated ? text.slice(0, TXT_STREAM_CHAR_LIMIT) : text,
+    warning: truncated ? `Текст обрезан до ${TXT_STREAM_CHAR_LIMIT} символов` : undefined,
+  };
+}
+
+async function streamCsvStrategy(data: string): Promise<StrategyResult> {
   return new Promise((resolve, reject) => {
     const rows: unknown[] = [];
-    let rowCount = 0;
+    let truncated = false;
     Papa.parse(data, {
       header: true,
       skipEmptyLines: true,
-      step: (result: { data: unknown }) => {
-        if (rowCount < CSV_STREAM_ROW_LIMIT) {
+      step: (result: { data: unknown }, parser) => {
+        if (rows.length < CSV_STREAM_ROW_LIMIT) {
           rows.push(result.data);
-          rowCount++;
+        } else {
+          truncated = true;
+          parser.abort();
         }
       },
       complete: () => {
-        const warning = rowCount >= CSV_STREAM_ROW_LIMIT
+        const warning = truncated
           ? `CSV truncated to ${CSV_STREAM_ROW_LIMIT} rows`
           : undefined;
         resolve({
@@ -77,11 +70,11 @@ async function streamCsvStrategy(data: string): Promise<Partial<JsonResult>> {
   });
 }
 
-async function processHtml(buf: Buffer): Promise<Partial<JsonResult>> {
+async function processHtml(buf: Buffer): Promise<StrategyResult> {
   try {
-    const root = parseHtml(buf.toString("utf8"));
-    const body = root.querySelector("body");
-    const cleanText = body ? body.textContent.replace(/\s+/g, " ").trim() : "";
+    const root = parseHtml(decodeBuffer(buf));
+    const contentRoot = root.querySelector("body") || root;
+    const cleanText = contentRoot.textContent.replace(/\s+/g, " ").trim();
     return { text: cleanText };
   } catch (error) {
     throw new ProcessingError(`HTML processing error: ${error instanceof Error ? error.message : String(error)}`);
@@ -97,12 +90,7 @@ function cfbLegacyStrategy(format: string, modernFormat: string): StrategyFn {
       const signature = buf.slice(0, 8);
       const cfbSignature = Buffer.from([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]);
       
-      if (signature.equals(cfbSignature)) {
-        throw new UnsupportedFormatError(
-          `Старые ${format.toUpperCase()} файлы не поддерживаются. ` +
-          `Пожалуйста, сохраните файл в формате ${modernFormat.toUpperCase()} и попробуйте снова.`
-        );
-      }
+      if (signature.equals(cfbSignature)) throw legacyFormatError(format, modernFormat);
       
       return { text: await extractViaOfficeParser(buf) };
     } catch (error) {
@@ -111,36 +99,41 @@ function cfbLegacyStrategy(format: string, modernFormat: string): StrategyFn {
       }
       
       if (error instanceof Error && error.message.includes('cfb files')) {
-        throw new UnsupportedFormatError(
-          `Старые ${format.toUpperCase()} файлы не поддерживаются. ` +
-          `Пожалуйста, сохраните файл в формате ${modernFormat.toUpperCase()} и попробуйте снова.`
-        );
+        throw legacyFormatError(format, modernFormat);
       }
-      
-      throw new ProcessingError(`${format.toUpperCase()} processing error: ${error instanceof Error ? error.message : String(error)}`);
+
+      throwProcessingError(format, error);
     }
   };
 }
 
-/**
- * Общая стратегия для ODF форматов (ODT, ODP, ODS)
- */
-function odfStrategy(format: string): StrategyFn {
+function legacyFormatError(format: string, modernFormat: string): UnsupportedFormatError {
+  return new UnsupportedFormatError(
+    `Старые ${format.toUpperCase()} файлы не поддерживаются. ` +
+    `Пожалуйста, сохраните файл в формате ${modernFormat.toUpperCase()} и попробуйте снова.`,
+  );
+}
+
+function throwProcessingError(format: string, error: unknown): never {
+  if (error instanceof UnsupportedFormatError || error instanceof ProcessingError) throw error;
+  throw new ProcessingError(
+    `${format.toUpperCase()} processing error: ${error instanceof Error ? error.message : String(error)}`,
+  );
+}
+
+function officeParserStrategy(format: string): StrategyFn {
   return async (buf) => {
     try {
       return { text: await extractViaOfficeParser(buf) };
     } catch (error) {
-      if (error instanceof UnsupportedFormatError || error instanceof ProcessingError) {
-        throw error;
-      }
-      throw new ProcessingError(`${format.toUpperCase()} processing error: ${error instanceof Error ? error.message : String(error)}`);
+      throwProcessingError(format, error);
     }
   };
 }
 
 // --- Стратегии ---
 
-export const strategies: Record<string, StrategyFn> = {
+export const strategies = {
   doc: cfbLegacyStrategy('doc', 'docx'),
   
   docx: async (buf, _ext, options) => {
@@ -188,13 +181,13 @@ export const strategies: Record<string, StrategyFn> = {
 
   xml: async (buf) => {
     const parser = new XMLParser({ ignoreAttributes: false });
-    const parsed = parser.parse(buf.toString("utf8"));
+    const parsed = parser.parse(decodeBuffer(buf));
     return { text: JSON.stringify(parsed, null, 2) };
   },
 
   yml: async (buf) => {
     try {
-      const xmlContent = buf.toString("utf8");
+      const xmlContent = decodeBuffer(buf);
       const parser = new XMLParser({ ignoreAttributes: false });
       const parsed = parser.parse(xmlContent);
       
@@ -210,9 +203,7 @@ export const strategies: Record<string, StrategyFn> = {
 
   json: async (buf) => {
     try {
-      const detected = chardet.detect(buf);
-      const encoding = (detected || 'utf-8') as BufferEncoding;
-      const jsonString = buf.toString(encoding);
+      const jsonString = decodeBuffer(buf);
       const parsed = JSON.parse(jsonString);
       
       if (typeof parsed === 'object' && parsed !== null) {
@@ -230,12 +221,11 @@ export const strategies: Record<string, StrategyFn> = {
     }
   },
 
-  odt: odfStrategy('odt'),
-  odp: odfStrategy('odp'),
-  ods: odfStrategy('ods'),
+  odt: officeParserStrategy('odt'),
+  odp: officeParserStrategy('odp'),
+  ods: officeParserStrategy('ods'),
 
   xlsx: async (buf) => {
-    const { readSheetNames } = await import("read-excel-file/node");
     const sheetNames = await readSheetNames(buf);
     const sheets: Record<string, unknown[]> = {};
     for (const sheetName of sheetNames) {
@@ -253,43 +243,28 @@ export const strategies: Record<string, StrategyFn> = {
           jsonData.push(rowData);
         }
       }
-      sheets[sheetName] = limitExcelSheet(jsonData, 0);
+      sheets[sheetName] = jsonData;
     }
     return { sheets };
   },
 
   csv: async (buf) => {
-    const detected = chardet.detect(buf);
-    const encoding = (detected || 'utf-8') as BufferEncoding;
-    const decoded = buf.toString(encoding);
-    return streamCsvStrategy(decoded);
+    return streamCsvStrategy(decodeBuffer(buf));
   },
 
-  pdf: async (buf) => {
-    try {
-      return { text: await extractViaOfficeParser(buf) };
-    } catch (error) {
-      throw new ProcessingError(
-        `PDF processing error: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-  },
+  pdf: officeParserStrategy('pdf'),
 
   txt: async (buf) => {
     if (buf.length > TXT_STREAM_SIZE_LIMIT) {
-      return streamTxtStrategy(buf);
+      return largeTxtStrategy(buf);
     }
-    const detected = chardet.detect(buf);
-    const encoding = (detected || 'utf-8') as BufferEncoding;
-    return { text: buf.toString(encoding) };
+    return { text: decodeBuffer(buf) };
   },
 
   ppt: cfbLegacyStrategy('ppt', 'pptx'),
 
-  pptx: async (buf) => ({
-    text: await extractViaOfficeParser(buf),
-  }),
+  pptx: officeParserStrategy('pptx'),
 
-  html: async (buf) => processHtml(buf),
-  htm: async (buf) => processHtml(buf),
-};
+  html: processHtml,
+  htm: processHtml,
+} satisfies Record<string, StrategyFn>;

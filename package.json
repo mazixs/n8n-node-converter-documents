@@ -42,18 +42,21 @@
   ],
   "author": "mazix",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.19"
+  },
   "bugs": {
     "url": "https://github.com/mazixs/n8n-node-converter-documents/issues"
   },
   "homepage": "https://github.com/mazixs/n8n-node-converter-documents#readme",
   "dependencies": {
     "chardet": "^2.1.1",
-    "fast-xml-parser": "^5.3.4",
-    "file-type": "16.5.4",
+    "fast-xml-parser": "5.10.0",
+    "file-type": "22.0.1",
     "mammoth": "^1.11.0",
     "node-html-markdown": "^2.0.0",
     "node-html-parser": "^7.0.2",
-    "officeparser": "6.0.4",
+    "officeparser": "6.1.1",
     "papaparse": "^5.5.3",
     "read-excel-file": "^6.0.3"
   },

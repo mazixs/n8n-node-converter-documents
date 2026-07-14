@@ -2,81 +2,93 @@
  * Общие типы и интерфейсы проекта
  */
 
-export interface JsonTextResult {
+export interface FileMetadata {
+  fileName: string | null;
+  fileSize: number;
+  fileType: string;
+  processedAt: string;
+}
+
+export interface StrategyTextResult {
   text: string;
   warning?: string;
-  metadata: Record<string, unknown>;
 }
 
-export interface JsonSheetResult {
-  sheets: Record<string, unknown>;
+export interface StrategySheetResult {
+  sheets: Record<string, unknown[]>;
   warning?: string;
-  metadata: Record<string, unknown>;
 }
 
+export type StrategyResult = StrategyTextResult | StrategySheetResult;
+export type JsonTextResult = StrategyTextResult & { metadata: FileMetadata };
+export type JsonSheetResult = StrategySheetResult & { metadata: FileMetadata };
 export type JsonResult = JsonTextResult | JsonSheetResult;
+
+export type DocxOutputFormat = 'text' | 'html' | 'markdown';
 
 export type StrategyFn = (
   buf: Buffer,
   ext?: string,
-  options?: { outputFormat?: string }
-) => Promise<Partial<JsonResult>>;
+  options?: { outputFormat?: DocxOutputFormat }
+) => Promise<StrategyResult>;
 
 // YML (Yandex Market) типы
+export type YmlScalar = string | number | boolean;
+
 export interface YmlDeliveryOption {
-  "@_cost"?: string;
-  "@_days"?: string;
-  "@_order-before"?: string;
-  cost?: string;
-  days?: string;
-  "order-before"?: string;
+  "@_cost"?: YmlScalar;
+  "@_days"?: YmlScalar;
+  "@_order-before"?: YmlScalar;
+  cost?: YmlScalar;
+  days?: YmlScalar;
+  "order-before"?: YmlScalar;
 }
 
 export interface YmlCurrency {
-  "@_id"?: string;
-  "@_rate"?: string;
-  id?: string;
-  rate?: string;
+  "@_id"?: YmlScalar;
+  "@_rate"?: YmlScalar;
+  id?: YmlScalar;
+  rate?: YmlScalar;
 }
 
 export interface YmlCategory {
-  "@_id"?: string;
-  "@_parentId"?: string;
-  "#text"?: string;
-  id?: string;
-  name?: string;
-  parentId?: string;
+  "@_id"?: YmlScalar;
+  "@_parentId"?: YmlScalar;
+  "#text"?: YmlScalar;
+  id?: YmlScalar;
+  name?: YmlScalar;
+  parentId?: YmlScalar;
 }
 
 export interface YmlOffer {
-  "@_id"?: string;
-  "@_available"?: string;
-  id?: string;
-  available?: string;
-  name?: string | string[];
-  url?: string | string[];
-  price?: string | string[];
-  currencyId?: string | string[];
-  categoryId?: string | string[];
-  vendor?: string | string[];
-  description?: string | string[];
-  oldprice?: string | string[];
-  vendorCode?: string | string[];
-  barcode?: string | string[];
-  sales_notes?: string | string[];
-  delivery?: string | string[];
-  pickup?: string | string[];
+  "@_id"?: YmlScalar;
+  "@_available"?: YmlScalar;
+  id?: YmlScalar;
+  available?: YmlScalar;
+  name?: YmlScalar | YmlScalar[];
+  url?: YmlScalar | YmlScalar[];
+  price?: YmlScalar | YmlScalar[];
+  currencyId?: YmlScalar | YmlScalar[];
+  categoryId?: YmlScalar | YmlScalar[];
+  vendor?: YmlScalar | YmlScalar[];
+  description?: YmlScalar | YmlScalar[];
+  oldprice?: YmlScalar | YmlScalar[];
+  vendorCode?: YmlScalar | YmlScalar[];
+  barcode?: YmlScalar | YmlScalar[];
+  sales_notes?: YmlScalar | YmlScalar[];
+  delivery?: YmlScalar | YmlScalar[];
+  pickup?: YmlScalar | YmlScalar[];
   "delivery-options"?: { option: YmlDeliveryOption | YmlDeliveryOption[] };
   "pickup-options"?: { option: YmlDeliveryOption | YmlDeliveryOption[] };
-  picture?: string | string[];
-  param?: Array<{ "@_name": string; "@_unit"?: string; "#text"?: string; name?: string; value?: string; unit?: string }>;
+  picture?: YmlScalar | YmlScalar[];
+  param?: Array<{ "@_name": YmlScalar; "@_unit"?: YmlScalar; "#text"?: YmlScalar; name?: YmlScalar; value?: YmlScalar; unit?: YmlScalar }>;
 }
 
 export interface YmlShop {
-  name?: string | string[];
-  company?: string | string[];
-  url?: string | string[];
-  platform?: string | string[];
+  name?: YmlScalar | YmlScalar[];
+  company?: YmlScalar | YmlScalar[];
+  url?: YmlScalar | YmlScalar[];
+  platform?: YmlScalar | YmlScalar[];
   currencies?: { currency: YmlCurrency | YmlCurrency[] };
   categories?: { category: YmlCategory | YmlCategory[] };
   offers?: { offer: YmlOffer | YmlOffer[] };

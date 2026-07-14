@@ -16,11 +16,11 @@ describe('html/htm strategies', () => {
     expect(getTextResult(result)).toBe('Hello World');
   });
 
-  it('should return empty string when body is missing', async () => {
+  it('should extract text from an HTML fragment when body is missing', async () => {
     const htmlContent = '<div>No body</div>';
     const result = await strategies.html(Buffer.from(htmlContent, 'utf8'));
 
-    expect(getTextResult(result)).toBe('');
+    expect(getTextResult(result)).toBe('No body');
   });
 
   it('htm strategy should behave the same as html', async () => {

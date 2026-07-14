@@ -1,12 +1,12 @@
 import type { IExecuteFunctions } from 'n8n-workflow';
-import { fromBuffer as fileTypeFromBuffer } from 'file-type';
+import { fileTypeFromBuffer } from 'file-type';
 
 import { strategies } from '../../src/strategies';
 import { EmptyFileError, UnsupportedFormatError } from '../../src/errors';
 import { FileToJsonNode } from '../../src/FileToJsonNode.node';
 
 jest.mock('file-type', () => ({
-  fromBuffer: jest.fn(),
+  fileTypeFromBuffer: jest.fn(),
 }));
 
 jest.mock('../../src/strategies', () => ({
@@ -141,5 +141,46 @@ describe('FileToJsonNode.execute', () => {
 
     await expect(node.execute.call(ctx as unknown as IExecuteFunctions))
       .rejects.toThrow(EmptyFileError);
+
+    expect(ctx.logger.info).not.toHaveBeenCalledWith(
+      'Processing completed',
+      expect.anything(),
+    );
+  });
+
+  it('should reject a malformed strategy result', async () => {
+    const ctx = createContext({ fileName: 'sample.txt' });
+    mockStrategies.txt.mockResolvedValue({});
+
+    await expect(node.execute.call(ctx as unknown as IExecuteFunctions))
+      .rejects.toThrow('TXT processing error: strategy returned an invalid result');
+  });
+
+  it('should not report a detector failure when detection succeeds without a match', async () => {
+    const ctx = createContext({ fileName: 'sample.unknown' });
+    mockFileTypeFromBuffer.mockResolvedValue(undefined);
+
+    await expect(node.execute.call(ctx as unknown as IExecuteFunctions))
+      .rejects.toThrow(UnsupportedFormatError);
+
+    expect(ctx.logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('should read the DOCX-only output format only for DOCX files', async () => {
+    const ctx = createContext({ fileName: 'sample.txt' });
+    mockStrategies.txt.mockResolvedValue({ text: 'hello' });
+
+    await node.execute.call(ctx as unknown as IExecuteFunctions);
+
+    expect(ctx.getNodeParameter).not.toHaveBeenCalledWith('outputFormat', expect.anything(), expect.anything());
+  });
+
+  it('should pair the aggregate result with its source item', async () => {
+    const ctx = createContext({ fileName: 'sample.txt' });
+    mockStrategies.txt.mockResolvedValue({ text: 'hello' });
+
+    const result = await node.execute.call(ctx as unknown as IExecuteFunctions);
+
+    expect(result[0][0].pairedItem).toEqual([{ item: 0 }]);
   });
 });
