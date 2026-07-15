@@ -35,7 +35,7 @@ git push origin main --follow-tags
 # 3. Wait for CI + GitHub Release
 
 # 4. Run the "Publish to npm" workflow with the released version
-gh workflow run publish-npm.yml -f version=1.2.3
+gh workflow run publish-npm.yml -f version=1.3.0
 ```
 
 ## Local verification

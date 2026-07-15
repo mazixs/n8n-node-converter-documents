@@ -210,17 +210,17 @@ Input binary → detect file type (magic bytes) → select strategy → process 
 
 | Component | Library | Version |
 |-----------|---------|---------|
-| DOCX/PDF/PPTX/OD* | officeparser | ^6.0.4 |
+| DOCX/PDF/PPTX/OD* | officeparser | 6.1.1 |
 | DOCX (HTML/MD) | mammoth | ^1.11.0 |
 | HTML → Markdown | node-html-markdown | ^2.0.0 |
 | XLSX | read-excel-file | ^6.0.3 |
 | CSV | papaparse | ^5.5.3 |
-| XML/YML | fast-xml-parser | ^5.3.4 |
+| XML/YML | fast-xml-parser | 5.10.0 |
 | HTML | node-html-parser | ^7.0.2 |
 | Encoding | chardet | ^2.1.1 |
-| File type | file-type | 16.5.4 |
+| File type | file-type | 22.0.1 |
 | n8n SDK | n8n-workflow | ^2.7.0 |
-| Runtime | Node.js | 22.x |
+| Runtime | Node.js | >=20.19 |
 | Language | TypeScript | 5.8 (strict) |
 | Tests | Jest | 30.x |
 
@@ -231,7 +231,7 @@ Input binary → detect file type (magic bytes) → select strategy → process 
 ```bash
 npm install          # Install dependencies
 npm run build        # Compile TypeScript
-npm test             # Run 57 tests (13 suites)
+npm test             # Run 77 tests (17 suites)
 npm run lint         # ESLint check
 npm run dev          # Watch mode
 npm run test:coverage # Coverage report
@@ -250,7 +250,7 @@ npm run test:coverage # Coverage report
 | Limitation | Details |
 |------------|---------|
 | **Legacy XLS** | Binary Excel not supported, convert to XLSX |
-| **file-type** | Pinned to v16.5.4 (last CJS version, v17+ is ESM-only) |
+| **Node.js** | Version 20.19 or newer is required for ESM/CommonJS interoperability |
 | **Scanned PDFs** | Image-based PDFs return empty text (no OCR) |
 | **Large files** | PDF/XLSX load into RAM; use Max File Size to control |
 

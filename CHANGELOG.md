@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.3.0] - 2026-07-15
+
+### Changed
+
+- Reworked the conversion pipeline into an explicit validation, detection, processing, result-validation, metadata, and completion sequence.
+- Replaced recursive promise scheduling with a bounded worker pool that preserves input order and validates concurrency.
+- Unified OfficeParser strategies and made the strategy registry the single source of truth for supported formats.
+- Standardized text decoding through `TextDecoder` for TXT, CSV, JSON, XML, YML, and HTML.
+- Removed the unused Excel row limiter and redundant strategy wrappers.
+- The package now requires Node.js 20.19 or newer.
+
+### Fixed
+
+- CSV truncation warnings now appear only when a row beyond the 100,000-row limit is present.
+- Yandex Market YML conversion preserves numeric `0` and boolean `false` values.
+- HTML fragments without a `<body>` element retain their text.
+- Invalid or empty strategy results no longer reach the completed state.
+- Aggregate n8n output now retains source-item pairing metadata.
+
+### Security
+
+- Updated `fast-xml-parser`, `file-type`, OfficeParser, and transitive dependencies; `npm audit` reports no known vulnerabilities.
+
+### Tests
+
+- Expanded the suite from 67 to 77 tests across 17 suites.
+- Increased line coverage from 73.96% to 87.24% and strategy coverage from 49.24% to 80.53%.
+- Added real-process compatibility checks for PDF, DOCX TextBox extraction, and CommonJS/ESM interoperation.
+
 ## [1.2.3] - 2026-07-12
 
 ### Fixed
