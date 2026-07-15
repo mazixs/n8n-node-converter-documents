@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1] - 2026-07-15
+
+### Changed
+
+- Raised the minimum Node.js version to 22.22.0 to match the current n8n node-development baseline.
+- Excluded local package archives, tool caches, browser-test reports, temporary directories, and agent state from Git and npm packages.
+- Added `.nvmrc` for consistent local Node.js selection.
+
 ## [1.3.0] - 2026-07-15
 
 ### Changed
@@ -9,7 +17,6 @@
 - Unified OfficeParser strategies and made the strategy registry the single source of truth for supported formats.
 - Standardized text decoding through `TextDecoder` for TXT, CSV, JSON, XML, YML, and HTML.
 - Removed the unused Excel row limiter and redundant strategy wrappers.
-- The package now requires Node.js 22.22.0 or newer, matching the current n8n node-development baseline.
 
 ### Fixed
 
