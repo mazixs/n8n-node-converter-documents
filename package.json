@@ -43,7 +43,7 @@
   "author": "mazix",
   "license": "MIT",
   "engines": {
-    "node": ">=20.19"
+    "node": ">=22.22.0"
   },
   "bugs": {
     "url": "https://github.com/mazixs/n8n-node-converter-documents/issues"

@@ -220,7 +220,7 @@ Input binary → detect file type (magic bytes) → select strategy → process 
 | Encoding | chardet | ^2.1.1 |
 | File type | file-type | 22.0.1 |
 | n8n SDK | n8n-workflow | ^2.7.0 |
-| Runtime | Node.js | >=20.19 |
+| Runtime | Node.js | >=22.22.0 |
 | Language | TypeScript | 5.8 (strict) |
 | Tests | Jest | 30.x |
 
@@ -250,7 +250,7 @@ npm run test:coverage # Coverage report
 | Limitation | Details |
 |------------|---------|
 | **Legacy XLS** | Binary Excel not supported, convert to XLSX |
-| **Node.js** | Version 20.19 or newer is required for ESM/CommonJS interoperability |
+| **Node.js** | Version 22.22.0 or newer is required to match the current n8n node-development baseline |
 | **Scanned PDFs** | Image-based PDFs return empty text (no OCR) |
 | **Large files** | PDF/XLSX load into RAM; use Max File Size to control |
 

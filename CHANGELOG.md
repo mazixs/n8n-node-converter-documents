@@ -9,7 +9,7 @@
 - Unified OfficeParser strategies and made the strategy registry the single source of truth for supported formats.
 - Standardized text decoding through `TextDecoder` for TXT, CSV, JSON, XML, YML, and HTML.
 - Removed the unused Excel row limiter and redundant strategy wrappers.
-- The package now requires Node.js 20.19 or newer.
+- The package now requires Node.js 22.22.0 or newer, matching the current n8n node-development baseline.
 
 ### Fixed
 

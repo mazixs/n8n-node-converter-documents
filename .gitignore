@@ -4,6 +4,7 @@ node_modules/
 # Build output
 dist/
 *.tsbuildinfo
+*.tgz
 
 # Logs
 *.log
@@ -31,12 +32,25 @@ Thumbs.db
 # Test coverage
 coverage/
 .nyc_output/
+test-results/
+playwright-report/
 
 # Temp
 *.tmp
 *.temp
 .cache/
+.eslintcache
+.npm/
+.pnpm-store/
+.turbo/
+tmp/
+temp/
 nul
+
+# Local agent state
+.agents/
+.claude/
+.codex/
 
 # Isolated development worktrees
 .worktrees/
