@@ -55,6 +55,7 @@ nul
 .agents/
 .claude/
 .codex/
+docs/superpowers/
 
 # Isolated development worktrees
 .worktrees/
