@@ -51,13 +51,13 @@ jobs:
         
     - name: Create GitHub Release
       if: steps.check.outputs.should_release == 'true'
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ steps.check.outputs.tag }}
-        name: Release ${{ steps.check.outputs.tag }}
-        generate_release_notes: true
-        draft: false
-        prerelease: false
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh release create "${{ steps.check.outputs.tag }}" \
+          --title "Release ${{ steps.check.outputs.tag }}" \
+          --generate-notes \
+          --verify-tag
         
     - name: Release Summary
       if: steps.check.outputs.should_release == 'true'
