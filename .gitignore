@@ -39,6 +39,10 @@ playwright-report/
 *.tmp
 *.temp
 .cache/
+.tesseract-cache/
+tessdata/
+ocr-output/
+*.traineddata
 .eslintcache
 .npm/
 .pnpm-store/

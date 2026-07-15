@@ -3,6 +3,12 @@ import { ProcessingError, UnsupportedFormatError } from '../../src/errors';
 import { strategies } from '../../src/strategies';
 import type { JsonResult } from '../../src/types';
 
+type ConfigurableStrategy = (
+  buffer: Buffer,
+  extension?: string,
+  options?: Record<string, unknown>,
+) => Promise<Partial<JsonResult>>;
+
 jest.mock('../../src/helpers', () => ({
   extractViaOfficeParser: jest.fn(),
 }));
@@ -36,6 +42,20 @@ describe('File Processing Strategies (real src/strategies implementation)', () =
     expect(result.warning).toBe('Многоуровневая структура JSON была преобразована в плоский объект');
   });
 
+  it('json strategy preserves nested structure when configured', async () => {
+    const input = { user: { name: 'John' }, roles: ['admin'] };
+    const strategy = strategies.json as unknown as ConfigurableStrategy;
+
+    const result = await strategy(
+      Buffer.from(JSON.stringify(input), 'utf8'),
+      'json',
+      { jsonMode: 'preserve' },
+    );
+
+    expect(JSON.parse(getTextResult(result))).toEqual(input);
+    expect(result.warning).toBeUndefined();
+  });
+
   it('json strategy should throw ProcessingError on invalid JSON', async () => {
     await expect(strategies.json(Buffer.from('{"invalid": }', 'utf8')))
       .rejects.toThrow(ProcessingError);
@@ -53,6 +73,14 @@ describe('File Processing Strategies (real src/strategies implementation)', () =
     const text = getTextResult(result);
     const parsed = JSON.parse(text);
     expect(parsed).toEqual({ root: { value: 42 } });
+  });
+
+  it('xml strategy limits custom entity expansion', async () => {
+    const entities = Array.from({ length: 10_001 }, () => '&x;').join('');
+    const xml = `<!DOCTYPE root [<!ENTITY x "a">]><root>${entities}</root>`;
+
+    await expect(strategies.xml(Buffer.from(xml, 'utf8')))
+      .rejects.toThrow(/entity expansion count limit/i);
   });
 
   it('html strategy should extract clean body text', async () => {
@@ -107,6 +135,15 @@ describe('File Processing Strategies (real src/strategies implementation)', () =
     expect(truncated.sheets.Sheet1).toHaveLength(100_000);
   });
 
+  it('csv strategy uses the configured row limit', async () => {
+    const strategy = strategies.csv as unknown as ConfigurableStrategy;
+    const result = await strategy(Buffer.from('value\n1\n2\n3', 'utf8'), 'csv', { maxRows: 2 });
+
+    expect(result.warning).toBe('CSV truncated to 2 rows');
+    if (!('sheets' in result) || !result.sheets) throw new Error('Expected sheet result');
+    expect(result.sheets.Sheet1).toHaveLength(2);
+  });
+
   it('large txt strategy should truncate directly without adding a newline', async () => {
     const largeText = 'a'.repeat(10 * 1024 * 1024 + 1);
 
@@ -114,5 +151,13 @@ describe('File Processing Strategies (real src/strategies implementation)', () =
 
     expect(getTextResult(result)).toBe('a'.repeat(1_000_000));
     expect(result.warning).toBe('Текст обрезан до 1000000 символов');
+  });
+
+  it('txt strategy uses the configured character limit for small files', async () => {
+    const strategy = strategies.txt as unknown as ConfigurableStrategy;
+    const result = await strategy(Buffer.from('abcdefgh', 'utf8'), 'txt', { maxTextChars: 5 });
+
+    expect(getTextResult(result)).toBe('abcde');
+    expect(result.warning).toBe('Текст обрезан до 5 символов');
   });
 });

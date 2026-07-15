@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.4.0] - 2026-07-15
+
+### Added
+
+- Added node version 6 with one ordered output item per input, preserved `item.json`, `pairedItem`, optional source binary retention, and structured `Continue On Fail` results.
+- Added the explicit `validate → detect → check limits → parse → OCR decision → normalize → emit` state machine.
+- Added configurable file, row, text, output, concurrency, and Office ZIP-container limits.
+- Added optional local OCR for scanned PDFs through dynamically loaded `tesseract.js` and `pdf-to-img`, including languages, model/cache paths, page limits, timeouts, concurrency, metadata, and guaranteed cleanup.
+- Added ZIP traversal, entry-count, expanded-size, and per-entry/archive compression-ratio validation.
+
+### Changed
+
+- Updated compatible production and development dependencies; pinned TypeScript 5.9 and the latest CommonJS-compatible `read-excel-file` 8 release.
+- Raised the compilation target to ES2022 and retained Node.js `>=22.22.0`; CI now covers Node.js 22.22 and 24 with current GitHub Actions runtimes.
+- JSON preserves nested structure by default in version 6, with flattening available explicitly.
+- Replaced the stale README with installation, version 5 migration, OCR, limits, troubleshooting, security, and release guidance.
+
+### Security
+
+- File signatures are checked even when the extension is supported, with mismatches reported to the workflow.
+- OCR paths and numerical controls are validated before loading optional modules; remote model locations require credential-free HTTPS.
+- `npm audit` reports no known vulnerabilities in either the production or complete dependency tree at release preparation time.
+
+### Tests
+
+- Added FSM, mixed-result, ordering, archive, configurable parser, OCR timeout, cleanup, language, and concurrency coverage.
+- Raised global coverage gates to 80% statements/lines, 60% branches, and 85% functions, with stricter gates for FSM, archive, and OCR modules.
+- Added a gated real OCR smoke test while keeping regular CI deterministic with mocks.
+
 ## [1.3.1] - 2026-07-15
 
 ### Changed

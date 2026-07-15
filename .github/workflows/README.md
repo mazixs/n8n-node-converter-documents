@@ -1,47 +1,44 @@
-# GitHub Actions Workflows
+# Release Workflows
 
-## Workflows
+## CI
 
-### 1. CI (`ci.yml`)
-**Triggers:** push/PR to `main`, `develop`
+`ci.yml` runs on pushes and pull requests to `main` and `develop`. Its Node.js 22.22/24 matrix performs a clean install, production dependency audit, lint, build, typecheck, coverage tests, and npm archive inspection.
 
-Lint → Build → Test → Security Audit
+## GitHub release
 
-### 2. Auto Release (`auto-release.yml`)
-**Trigger:** push to `main` with a new version in `package.json`
+`auto-release.yml` runs after a push to `main`. If `package.json` contains a version without an existing `vX.Y.Z` tag, it waits for CI, creates and pushes the tag, and creates the GitHub Release.
 
-1. Runs CI checks
-2. Checks if version changed (compares with git tags)
-3. Creates git tag `vX.Y.Z`
-4. Creates GitHub Release with auto-generated release notes
+## npm Trusted Publishing
 
-> **npm publish is done manually.**
+`publish-npm.yml` is a manually dispatched release workflow. It checks out the requested tag, verifies and tests it on Node.js 24, updates npm to a Trusted Publishing-compatible version, and publishes without a stored token.
 
-### 3. npm Publish (`publish-npm.yml`)
+Configure the package on npmjs.com under **Settings → Trusted Publisher**:
 
-**Trigger:** manual workflow dispatch with an existing release version.
+- provider: GitHub Actions;
+- organization/user: `mazixs`;
+- repository: `n8n-node-converter-documents`;
+- workflow filename: `publish-npm.yml`;
+- allowed action: `npm publish`.
 
-Checks out the matching `vX.Y.Z` tag, verifies the package version, runs lint/build/tests, and publishes through the repository `NPM_TOKEN` secret.
+The workflow has `id-token: write`; npm exchanges that OIDC identity for a short-lived credential. Two-factor authentication stays enabled, but no `NPM_TOKEN` or one-time code is needed in CI. GitHub-hosted runners and npm CLI 11.5.1 or newer are required.
 
-## How to release
-
-```bash
-# 1. Bump version
-npm version patch  # or minor / major
-
-# 2. Push to main
-git push origin main --follow-tags
-
-# 3. Wait for CI + GitHub Release
-
-# 4. Run the "Publish to npm" workflow with the released version
-gh workflow run publish-npm.yml -f version=1.3.0
-```
-
-## Local verification
+After the GitHub release exists:
 
 ```bash
-npm run lint
-npm run build
-npm test
+gh workflow run publish-npm.yml -f version=1.4.0
+gh run watch
 ```
+
+## Manual npm publication
+
+Use this only when Trusted Publishing is not configured:
+
+```bash
+npm whoami
+npm run test:ci
+npm audit --omit=dev
+npm pack --dry-run
+npm publish --access public --otp=<code>
+```
+
+The extra code is the npm two-factor authentication one-time password required for an interactive publish. Do not place tokens or one-time codes in repository files, shell history, or workflow logs.

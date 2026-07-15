@@ -3,7 +3,8 @@ import { fileTypeFromBuffer } from 'file-type';
 
 import { strategies } from '../../src/strategies';
 import { EmptyFileError, UnsupportedFormatError } from '../../src/errors';
-import { FileToJsonNode } from '../../src/FileToJsonNode.node';
+import { FileToJsonNode } from '../../src/ConvertFileToJson.node';
+import { validateZipArchive } from '../../src/security/archive';
 
 jest.mock('file-type', () => ({
   fileTypeFromBuffer: jest.fn(),
@@ -15,6 +16,11 @@ jest.mock('../../src/strategies', () => ({
     pdf: jest.fn(),
     docx: jest.fn(),
   },
+}));
+
+jest.mock('../../src/security/archive', () => ({
+  ...jest.requireActual('../../src/security/archive'),
+  validateZipArchive: jest.fn(),
 }));
 
 type StrategyMockMap = Record<string, jest.Mock>;
@@ -34,6 +40,7 @@ type NodeOutputPayload = {
 
 const mockFileTypeFromBuffer = fileTypeFromBuffer as jest.MockedFunction<typeof fileTypeFromBuffer>;
 const mockStrategies = strategies as unknown as StrategyMockMap;
+const mockValidateZipArchive = validateZipArchive as jest.MockedFunction<typeof validateZipArchive>;
 
 function createContext(options?: {
   fileName?: string;
@@ -68,6 +75,14 @@ function createContext(options?: {
       if (name in params) return params[name];
       return fallback;
     }),
+    getNode: jest.fn(() => ({
+      id: 'node-id',
+      name: 'Convert File to JSON',
+      type: 'convertFileToJson',
+      typeVersion: 5,
+      position: [0, 0],
+      parameters: {},
+    })),
     helpers,
     logger: {
       info: jest.fn(),
@@ -112,6 +127,23 @@ describe('FileToJsonNode.execute', () => {
     await node.execute.call(ctx as unknown as IExecuteFunctions);
 
     expect(mockStrategies.docx).toHaveBeenCalledWith(buffer, 'docx', { outputFormat: 'markdown' });
+  });
+
+  it('checks Office ZIP containers before parsing in version 5', async () => {
+    const buffer = Buffer.from('docx', 'utf8');
+    const ctx = createContext({ fileName: 'sample.docx', buffer });
+    mockValidateZipArchive.mockResolvedValue({ entries: 1, compressedBytes: 1, uncompressedBytes: 1 });
+    mockStrategies.docx.mockResolvedValue({ text: 'content' });
+
+    await node.execute.call(ctx as unknown as IExecuteFunctions);
+
+    expect(mockValidateZipArchive).toHaveBeenCalledWith(buffer, {
+      maxEntries: 10000,
+      maxUncompressedBytes: 200 * 1024 * 1024,
+      maxCompressionRatio: 100,
+    });
+    expect(mockValidateZipArchive.mock.invocationCallOrder[0])
+      .toBeLessThan(mockStrategies.docx.mock.invocationCallOrder[0]);
   });
 
   it('should auto-detect extension from file-type when extension is unknown', async () => {

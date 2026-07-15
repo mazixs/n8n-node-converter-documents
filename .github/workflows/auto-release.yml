@@ -21,7 +21,7 @@ jobs:
     
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0
         
@@ -67,7 +67,7 @@ jobs:
         echo "- **Version:** ${{ steps.check.outputs.version }}" >> $GITHUB_STEP_SUMMARY
         echo "- **GitHub:** https://github.com/mazixs/n8n-node-converter-documents/releases/tag/${{ steps.check.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "> npm publish is done manually: \`npm publish --access public\`" >> $GITHUB_STEP_SUMMARY
+        echo "> Publish with the Trusted Publishing workflow or the documented manual OTP command." >> $GITHUB_STEP_SUMMARY
         
     - name: Skip Summary
       if: steps.check.outputs.should_release != 'true'

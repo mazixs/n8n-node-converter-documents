@@ -27,6 +27,8 @@ import {
 } from "./errors";
 import { sanitizeFileName, promisePool } from "./utils";
 import { strategies } from "./strategies";
+import { executeV6 } from './pipeline/v6';
+import { validateZipArchive } from './security/archive';
 import type { DocxOutputFormat, JsonResult, StrategyResult } from "./types";
 
 function isSupportedFormat(extension: string): extension is keyof typeof strategies {
@@ -56,9 +58,10 @@ export class FileToJsonNode implements INodeType {
     name: "convertFileToJson",
     icon: "file:icon.svg",
     group: ["transform"],
-    version: 5,
+    version: [5, 6],
     description:
       "DOCX / XML / YML / XLSX / CSV / PDF / TXT / PPTX / HTML → JSON|text",
+    subtitle: 'Document → JSON/Text',
     defaults: { name: "Convert File to JSON" },
     inputs: [NodeConnectionTypes.Main],
     outputs: [NodeConnectionTypes.Main],
@@ -80,7 +83,8 @@ export class FileToJsonNode implements INodeType {
         typeOptions: {
           minValue: 1,
           maxValue: 100
-        }
+        },
+        displayOptions: { show: { '@version': [5] } },
       },
       {
         displayName: "Max Concurrency",
@@ -91,7 +95,8 @@ export class FileToJsonNode implements INodeType {
         typeOptions: {
           minValue: 1,
           maxValue: 10
-        }
+        },
+        displayOptions: { show: { '@version': [5] } },
       },
       {
         displayName: "Output Format (DOCX)",
@@ -117,6 +122,175 @@ export class FileToJsonNode implements INodeType {
         default: "text",
         description: "Choose output format for DOCX files. Markdown and HTML preserve tables and formatting for AI/LLM processing.",
       },
+      {
+        displayName: 'JSON Output Mode',
+        name: 'jsonMode',
+        type: 'options',
+        options: [
+          { name: 'Preserve Structure', value: 'preserve' },
+          { name: 'Flatten', value: 'flatten' },
+        ],
+        default: 'preserve',
+        description: 'Whether nested JSON should be preserved or converted to dotted keys',
+        displayOptions: { show: { '@version': [6] } },
+      },
+      {
+        displayName: 'Keep Source Binary',
+        name: 'keepSourceBinary',
+        type: 'boolean',
+        default: false,
+        description: 'Whether to copy the source binary property to the output item',
+        displayOptions: { show: { '@version': [6] } },
+      },
+      {
+        displayName: 'Advanced Options',
+        name: 'advancedOptions',
+        type: 'collection',
+        placeholder: 'Add Option',
+        default: {},
+        displayOptions: { show: { '@version': [6] } },
+        options: [
+          {
+            displayName: 'Max File Size (MB)',
+            name: 'maxFileSizeMb',
+            type: 'number',
+            default: 50,
+            description: 'Maximum input size; use 0 for no workflow-level limit',
+            typeOptions: { minValue: 0 },
+          },
+          {
+            displayName: 'Max Concurrency',
+            name: 'maxConcurrency',
+            type: 'number',
+            default: 4,
+            description: 'Number of input files processed concurrently',
+            typeOptions: { minValue: 1 },
+          },
+          {
+            displayName: 'Max Rows per Sheet',
+            name: 'maxRows',
+            type: 'number',
+            default: 100000,
+            description: 'CSV/XLSX row limit per sheet; use 0 for unlimited',
+            typeOptions: { minValue: 0 },
+          },
+          {
+            displayName: 'Max TXT Characters',
+            name: 'maxTextChars',
+            type: 'number',
+            default: 1000000,
+            description: 'TXT character limit; use 0 for unlimited',
+            typeOptions: { minValue: 0 },
+          },
+          {
+            displayName: 'Max Output Characters',
+            name: 'maxOutputChars',
+            type: 'number',
+            default: 1000000,
+            description: 'Maximum serialized document content; text is truncated, structured output fails safely; use 0 for unlimited',
+            typeOptions: { minValue: 0 },
+          },
+          {
+            displayName: 'Max Archive Entries',
+            name: 'maxArchiveEntries',
+            type: 'number',
+            default: 10000,
+            description: 'Maximum entries in Office ZIP containers; use 0 for unlimited',
+            typeOptions: { minValue: 0 },
+          },
+          {
+            displayName: 'Max Archive Uncompressed Size (MB)',
+            name: 'maxArchiveUncompressedMb',
+            type: 'number',
+            default: 200,
+            description: 'Maximum expanded Office container size; use 0 for unlimited',
+            typeOptions: { minValue: 0 },
+          },
+          {
+            displayName: 'Max Compression Ratio',
+            name: 'maxCompressionRatio',
+            type: 'number',
+            default: 100,
+            description: 'Maximum expanded-to-compressed ZIP ratio; use 0 for unlimited',
+            typeOptions: { minValue: 0 },
+          },
+        ],
+      },
+      {
+        displayName: 'OCR Mode',
+        name: 'ocrMode',
+        type: 'options',
+        options: [
+          { name: 'Disabled', value: 'disabled' },
+          { name: 'When No Text Found', value: 'whenEmpty' },
+          { name: 'Always', value: 'always' },
+        ],
+        default: 'disabled',
+        description: 'OCR is local but CPU/RAM intensive and intended for self-hosted n8n',
+        displayOptions: { show: { '@version': [6] } },
+      },
+      {
+        displayName: 'OCR Options',
+        name: 'ocrOptions',
+        type: 'collection',
+        placeholder: 'Add OCR Option',
+        default: {},
+        displayOptions: { show: { '@version': [6], ocrMode: ['whenEmpty', 'always'] } },
+        options: [
+          {
+            displayName: 'Languages',
+            name: 'languages',
+            type: 'string',
+            default: 'eng',
+            placeholder: 'rus+eng',
+            description: 'Tesseract language codes separated by +',
+          },
+          {
+            displayName: 'Language Data Path',
+            name: 'languageDataPath',
+            type: 'string',
+            default: '',
+            description: 'Optional local path or HTTPS URL containing Tesseract language data',
+          },
+          {
+            displayName: 'Cache Path',
+            name: 'cachePath',
+            type: 'string',
+            default: '',
+            description: 'Optional writable directory for cached language models',
+          },
+          {
+            displayName: 'Render Scale',
+            name: 'scale',
+            type: 'number',
+            default: 2,
+            typeOptions: { minValue: 1 },
+          },
+          {
+            displayName: 'Max Pages',
+            name: 'maxPages',
+            type: 'number',
+            default: 10,
+            description: 'Maximum pages recognized; use 0 for all pages',
+            typeOptions: { minValue: 0 },
+          },
+          {
+            displayName: 'Page Timeout (Seconds)',
+            name: 'pageTimeoutSeconds',
+            type: 'number',
+            default: 60,
+            typeOptions: { minValue: 1 },
+          },
+          {
+            displayName: 'OCR Concurrency',
+            name: 'ocrConcurrency',
+            type: 'number',
+            default: 1,
+            description: 'Maximum PDF files recognized concurrently',
+            typeOptions: { minValue: 1 },
+          },
+        ],
+      },
     ],
   };
 
@@ -124,6 +298,8 @@ export class FileToJsonNode implements INodeType {
    * Main execution method for n8n node
    */
   async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
+    if (this.getNode().typeVersion >= 6) return executeV6.call(this);
+
     const items = this.getInputData();
     const maxFileSize = (this.getNodeParameter('maxFileSize', 0, 50) as number) * 1024 * 1024;
     const maxConcurrency = this.getNodeParameter('maxConcurrency', 0, 4) as number;
@@ -181,6 +357,14 @@ export class FileToJsonNode implements INodeType {
         ext,
         size: buf.length,
       });
+
+      if (['docx', 'xlsx', 'pptx', 'odt', 'ods', 'odp'].includes(ext)) {
+        await validateZipArchive(buf, {
+          maxEntries: 10_000,
+          maxUncompressedBytes: 200 * 1024 * 1024,
+          maxCompressionRatio: 100,
+        });
+      }
 
       const startTime = performance.now();
       let strategyResult: StrategyResult;

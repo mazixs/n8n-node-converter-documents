@@ -1,6 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import mammoth from "mammoth";
-import readXlsxFile, { readSheetNames } from "read-excel-file/node";
+import readXlsxFile from "read-excel-file/node";
 import { parse as parseHtml } from "node-html-parser";
 import chardet from "chardet";
 import Papa from "papaparse";
@@ -18,8 +18,18 @@ import type { StrategyFn, StrategyResult } from "../types";
 
 // Константы
 const CSV_STREAM_ROW_LIMIT = 100000;
-const TXT_STREAM_SIZE_LIMIT = 10 * 1024 * 1024; // 10 MB
 const TXT_STREAM_CHAR_LIMIT = 1_000_000; // 1 млн символов
+const XML_OPTIONS = {
+  ignoreAttributes: false,
+  processEntities: {
+    enabled: true,
+    maxEntitySize: 10_000,
+    maxExpansionDepth: 10,
+    maxTotalExpansions: 10_000,
+    maxExpandedLength: 1_000_000,
+    maxEntityCount: 1_000,
+  },
+} as const;
 
 // --- Вспомогательные функции ---
 
@@ -32,16 +42,16 @@ function decodeBuffer(buf: Buffer): string {
   }
 }
 
-async function largeTxtStrategy(buf: Buffer): Promise<StrategyResult> {
+async function txtStrategy(buf: Buffer, maxCharacters: number): Promise<StrategyResult> {
   const text = decodeBuffer(buf);
-  const truncated = text.length > TXT_STREAM_CHAR_LIMIT;
+  const truncated = maxCharacters > 0 && text.length > maxCharacters;
   return {
-    text: truncated ? text.slice(0, TXT_STREAM_CHAR_LIMIT) : text,
-    warning: truncated ? `Текст обрезан до ${TXT_STREAM_CHAR_LIMIT} символов` : undefined,
+    text: truncated ? text.slice(0, maxCharacters) : text,
+    warning: truncated ? `Текст обрезан до ${maxCharacters} символов` : undefined,
   };
 }
 
-async function streamCsvStrategy(data: string): Promise<StrategyResult> {
+async function streamCsvStrategy(data: string, maxRows: number): Promise<StrategyResult> {
   return new Promise((resolve, reject) => {
     const rows: unknown[] = [];
     let truncated = false;
@@ -49,7 +59,7 @@ async function streamCsvStrategy(data: string): Promise<StrategyResult> {
       header: true,
       skipEmptyLines: true,
       step: (result: { data: unknown }, parser) => {
-        if (rows.length < CSV_STREAM_ROW_LIMIT) {
+        if (maxRows === 0 || rows.length < maxRows) {
           rows.push(result.data);
         } else {
           truncated = true;
@@ -58,7 +68,7 @@ async function streamCsvStrategy(data: string): Promise<StrategyResult> {
       },
       complete: () => {
         const warning = truncated
-          ? `CSV truncated to ${CSV_STREAM_ROW_LIMIT} rows`
+          ? `CSV truncated to ${maxRows} rows`
           : undefined;
         resolve({
           sheets: { Sheet1: rows },
@@ -180,7 +190,7 @@ export const strategies = {
   },
 
   xml: async (buf) => {
-    const parser = new XMLParser({ ignoreAttributes: false });
+    const parser = new XMLParser(XML_OPTIONS);
     const parsed = parser.parse(decodeBuffer(buf));
     return { text: JSON.stringify(parsed, null, 2) };
   },
@@ -188,7 +198,7 @@ export const strategies = {
   yml: async (buf) => {
     try {
       const xmlContent = decodeBuffer(buf);
-      const parser = new XMLParser({ ignoreAttributes: false });
+      const parser = new XMLParser(XML_OPTIONS);
       const parsed = parser.parse(xmlContent);
       
       if (parsed.yml_catalog && parsed.yml_catalog.shop) {
@@ -201,12 +211,15 @@ export const strategies = {
     }
   },
 
-  json: async (buf) => {
+  json: async (buf, _ext = undefined, options = undefined) => {
     try {
       const jsonString = decodeBuffer(buf);
       const parsed = JSON.parse(jsonString);
       
       if (typeof parsed === 'object' && parsed !== null) {
+        if (options?.jsonMode === 'preserve') {
+          return { text: JSON.stringify(parsed, null, 2) };
+        }
         const flattened = flattenJsonObject(parsed);
         return { 
           text: JSON.stringify(flattened, null, 2),
@@ -225,11 +238,12 @@ export const strategies = {
   odp: officeParserStrategy('odp'),
   ods: officeParserStrategy('ods'),
 
-  xlsx: async (buf) => {
-    const sheetNames = await readSheetNames(buf);
+  xlsx: async (buf, _ext = undefined, options = undefined) => {
+    const workbook = await readXlsxFile(buf, { dateFormat: 'YYYY-MM-DD' });
     const sheets: Record<string, unknown[]> = {};
-    for (const sheetName of sheetNames) {
-      const rows = await readXlsxFile(buf, { sheet: sheetName, dateFormat: 'YYYY-MM-DD' });
+    const maxRows = options?.maxRows ?? CSV_STREAM_ROW_LIMIT;
+    let truncated = false;
+    for (const { sheet: sheetName, data: rows } of workbook) {
       const jsonData: unknown[] = [];
       for (const row of rows) {
         const rowData: Record<string, unknown> = {};
@@ -240,25 +254,26 @@ export const strategies = {
           }
         });
         if (Object.keys(rowData).length > 0) {
-          jsonData.push(rowData);
+          if (maxRows === 0 || jsonData.length < maxRows) jsonData.push(rowData);
+          else truncated = true;
         }
       }
       sheets[sheetName] = jsonData;
     }
-    return { sheets };
+    return {
+      sheets,
+      warning: truncated ? `XLSX sheets truncated to ${maxRows} row(s)` : undefined,
+    };
   },
 
-  csv: async (buf) => {
-    return streamCsvStrategy(decodeBuffer(buf));
+  csv: async (buf, _ext = undefined, options = undefined) => {
+    return streamCsvStrategy(decodeBuffer(buf), options?.maxRows ?? CSV_STREAM_ROW_LIMIT);
   },
 
   pdf: officeParserStrategy('pdf'),
 
-  txt: async (buf) => {
-    if (buf.length > TXT_STREAM_SIZE_LIMIT) {
-      return largeTxtStrategy(buf);
-    }
-    return { text: decodeBuffer(buf) };
+  txt: async (buf, _ext = undefined, options = undefined) => {
+    return txtStrategy(buf, options?.maxTextChars ?? TXT_STREAM_CHAR_LIMIT);
   },
 
   ppt: cfbLegacyStrategy('ppt', 'pptx'),

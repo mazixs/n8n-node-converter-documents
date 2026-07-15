@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { strategies } from '../../src/strategies';
 import { numberToColumn } from '../../src/utils/columns';
+import type { StrategyFn } from '../../src/types';
 
 describe('XLSX Sheets Processing', () => {
   describe('Real XLSX file structure', () => {
@@ -14,6 +15,17 @@ describe('XLSX Sheets Processing', () => {
       expect(Object.keys(result.sheets)).toEqual(['Sheet1']);
       expect(result.sheets.Sheet1).toHaveLength(4);
       expect(result.sheets.Sheet1[0]).toEqual(expect.objectContaining({ A: expect.anything() }));
+    });
+
+    it('limits rows per sheet when configured', async () => {
+      const buffer = fs.readFileSync(path.join(__dirname, '../samples/sample2.xlsx'));
+
+      const strategy = strategies.xlsx as unknown as StrategyFn;
+      const result = await strategy(buffer, 'xlsx', { maxRows: 1 });
+
+      if (!('sheets' in result)) throw new Error('Expected sheets result');
+      expect(Object.values(result.sheets).every((rows) => rows.length <= 1)).toBe(true);
+      expect(result.warning).toMatch(/1 row/i);
     });
   });
 

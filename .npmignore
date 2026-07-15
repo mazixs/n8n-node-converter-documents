@@ -8,6 +8,7 @@ docs/
 
 # Tests
 test/
+scripts/
 *.test.ts
 *.test.js
 *.spec.ts
@@ -64,6 +65,10 @@ yarn.lock
 *.tmp
 *.temp
 .cache/
+.tesseract-cache/
+tessdata/
+ocr-output/
+*.traineddata
 .eslintcache
 .npm/
 .pnpm-store/

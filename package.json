@@ -1,20 +1,25 @@
 {
   "name": "@mazix/n8n-nodes-converter-documents",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "description": "n8n node to convert various document formats (DOCX, DOC, XML, YML, XLSX, CSV, PDF, TXT, PPT, PPTX, HTML, JSON, ODT, ODP, ODS) to JSON or text format",
-  "main": "dist/FileToJsonNode.node.js",
+  "main": "dist/ConvertFileToJson.node.js",
   "files": [
     "dist/**/*.js",
     "dist/**/*.d.ts",
     "dist/**/*.svg"
   ],
   "scripts": {
-    "build": "tsc && node -e \"require('fs').cpSync('src/icon.svg','dist/icon.svg')\"",
+    "build": "rimraf dist && tsc && node -e \"const fs=require('fs');fs.cpSync('src/icon.svg','dist/icon.svg');fs.cpSync('src/ocr/loader.js','dist/ocr/loader.js')\"",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
+    "test:coverage": "jest --coverage --runInBand",
+    "test:ocr-smoke": "npm run build && RUN_OCR_SMOKE=1 jest test/integration/ocr-smoke.test.ts --runInBand",
+    "test:ci": "npm run lint && npm run typecheck && npm run test:coverage && npm run build",
+    "scan:n8n:published": "scan-community-package @mazix/n8n-nodes-converter-documents@$npm_package_version",
+    "verify:package": "npm pack --dry-run",
     "dev": "tsc --watch",
     "clean": "rimraf dist coverage",
     "prepack": "npm run build"
@@ -40,7 +45,10 @@
     "markdown",
     "docx-to-markdown"
   ],
-  "author": "mazix",
+  "author": {
+    "name": "mazix",
+    "email": "mazix@bk.ru"
+  },
   "license": "MIT",
   "engines": {
     "node": ">=22.22.0"
@@ -50,29 +58,32 @@
   },
   "homepage": "https://github.com/mazixs/n8n-node-converter-documents#readme",
   "dependencies": {
-    "chardet": "^2.1.1",
-    "fast-xml-parser": "5.10.0",
-    "file-type": "22.0.1",
-    "mammoth": "^1.11.0",
+    "chardet": "^2.2.0",
+    "fast-xml-parser": "^5.10.0",
+    "file-type": "^22.0.1",
+    "mammoth": "^1.12.0",
     "node-html-markdown": "^2.0.0",
-    "node-html-parser": "^7.0.2",
-    "officeparser": "6.1.1",
-    "papaparse": "^5.5.3",
-    "read-excel-file": "^6.0.3"
+    "node-html-parser": "^9.0.0",
+    "officeparser": "7.3.0",
+    "papaparse": "^5.5.4",
+    "read-excel-file": "8.0.3",
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
-    "@eslint/js": "^9.28.0",
+    "@eslint/js": "^10.0.1",
+    "@n8n/scan-community-package": "0.9.7",
     "@types/jest": "^30.0.0",
-    "@types/node": "^22.15.29",
+    "@types/node": "^22.20.1",
     "@types/papaparse": "^5.5.2",
-    "eslint": "^9.28.0",
-    "globals": "^16.2.0",
-    "jest": "^30.0.1",
-    "n8n-workflow": "^2.7.0",
-    "rimraf": "^6.0.1",
-    "ts-jest": "^29.4.0",
-    "typescript": "^5.8.3",
-    "typescript-eslint": "^8.33.1"
+    "@types/yauzl": "^3.4.0",
+    "eslint": "^10.7.0",
+    "globals": "^17.7.0",
+    "jest": "^30.4.2",
+    "n8n-workflow": "^2.30.2",
+    "rimraf": "^6.1.3",
+    "ts-jest": "^29.4.11",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.64.0"
   },
   "peerDependencies": {
     "n8n-workflow": "*"
@@ -80,7 +91,11 @@
   "n8n": {
     "n8nNodesApiVersion": 1,
     "nodes": [
-      "dist/FileToJsonNode.node.js"
+      "dist/ConvertFileToJson.node.js"
     ]
+  },
+  "optionalDependencies": {
+    "pdf-to-img": "^6.2.0",
+    "tesseract.js": "^7.0.0"
   }
 }

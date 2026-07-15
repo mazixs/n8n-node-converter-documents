@@ -25,11 +25,19 @@ export type JsonSheetResult = StrategySheetResult & { metadata: FileMetadata };
 export type JsonResult = JsonTextResult | JsonSheetResult;
 
 export type DocxOutputFormat = 'text' | 'html' | 'markdown';
+export type JsonOutputMode = 'preserve' | 'flatten';
+
+export interface StrategyOptions {
+  outputFormat?: DocxOutputFormat;
+  jsonMode?: JsonOutputMode;
+  maxRows?: number;
+  maxTextChars?: number;
+}
 
 export type StrategyFn = (
   buf: Buffer,
   ext?: string,
-  options?: { outputFormat?: DocxOutputFormat }
+  options?: StrategyOptions,
 ) => Promise<StrategyResult>;
 
 // YML (Yandex Market) типы

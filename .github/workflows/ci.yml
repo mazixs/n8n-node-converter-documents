@@ -12,17 +12,21 @@ permissions:
 
 jobs:
   ci:
-    name: Lint → Build → Test
+    name: Node ${{ matrix.node }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.22.0', '24']
     
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       
     - name: Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
-        node-version: '22.x'
+        node-version: ${{ matrix.node }}
         cache: 'npm'
         
     - name: Install Dependencies
@@ -30,16 +34,22 @@ jobs:
       
     - name: Security Audit
       run: npm audit --omit=dev --audit-level=high
-      continue-on-error: true
       
     - name: Lint
       run: npm run lint
       
     - name: Build
       run: npm run build
+
+    - name: Typecheck
+      run: npm run typecheck
       
-    - name: Test
-      run: npm test
+    - name: Test and coverage
+      run: npm run test:coverage
+
+    - name: Verify npm package contents
+      if: matrix.node == '24'
+      run: npm run verify:package
       
     - name: Summary
       if: always()
