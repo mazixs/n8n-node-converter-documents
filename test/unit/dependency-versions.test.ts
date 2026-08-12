@@ -12,15 +12,15 @@ function readManifest(manifestPath: string): PackageManifest {
 }
 
 describe('production dependency versions', () => {
-  it('pins officeparser to the installed compatible version', () => {
+  it('pins officeparser to the installed compatible version under a fresh package name', () => {
     const projectManifest = readManifest(path.resolve(__dirname, '../../package.json'));
     const officeParserManifest = readManifest(
-      path.resolve(path.dirname(require.resolve('officeparser')), '../package.json'),
+      path.resolve(path.dirname(require.resolve('officeparser-modern')), '../package.json'),
     );
-    const declaredVersion = projectManifest.dependencies?.officeparser;
+    const declaredVersion = projectManifest.dependencies?.['officeparser-modern'];
 
-    expect(declaredVersion).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(declaredVersion).toBe(officeParserManifest.version);
+    expect(declaredVersion).toBe('npm:officeparser@6.0.7');
+    expect(officeParserManifest.version).toBe('6.0.7');
   });
 
   it('loads file-type through the native ESM bridge and detects a PDF signature', () => {

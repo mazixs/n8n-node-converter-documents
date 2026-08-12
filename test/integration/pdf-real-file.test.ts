@@ -7,7 +7,7 @@ describe('PDF extraction with the production parser', () => {
     const pdfPath = path.resolve(__dirname, '../samples/sample3.pdf');
     const script = [
       "const fs = require('fs');",
-      "const { parseOffice } = require('officeparser');",
+      "const { parseOffice } = require('officeparser-modern');",
       "parseOffice(fs.readFileSync(process.argv[1]))",
       "  .then((ast) => process.stdout.write(ast.toText()))",
       "  .catch((error) => { console.error(error); process.exit(1); });",

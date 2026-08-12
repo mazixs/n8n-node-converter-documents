@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.4.3] - 2026-08-12
+
+### Fixed
+
+- Fixed in-place updates from 1.2.2 when the existing installation contains `officeparser/node_modules/yauzl`. The updated OfficeParser package now uses a fresh package name so n8n cannot reuse the stale nested dependency path.
+
+### Tests
+
+- Added a regression fixture that reproduces the existing nested `officeparser` dependency layout from n8n and verifies the replacement in the same Node.js process.
+
 ## [1.4.2] - 2026-08-12
 
 ### Fixed

@@ -1,11 +1,11 @@
 import { extractViaOfficeParser } from '../../src/helpers';
 
 // Mock officeparser module (v6 API: parseOffice returns AST with toText())
-jest.mock('officeparser', () => ({
+jest.mock('officeparser-modern', () => ({
   parseOffice: jest.fn()
 }));
 
-import { parseOffice } from 'officeparser';
+import { parseOffice } from 'officeparser-modern';
 const mockParseOffice = parseOffice as jest.MockedFunction<typeof parseOffice>;
 
 describe('helpers', () => {

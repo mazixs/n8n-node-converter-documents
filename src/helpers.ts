@@ -1,5 +1,5 @@
 // Вспомогательные функции для работы с файлами в кастомном ноде n8n
-import { parseOffice } from 'officeparser';
+import { parseOffice } from 'officeparser-modern';
 
 /**
  * Извлекает текст из буфера с помощью officeparser
