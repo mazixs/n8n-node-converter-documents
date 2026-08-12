@@ -52,7 +52,7 @@ function isStrategyResult(value: unknown): value is StrategyResult {
  * Custom n8n node: convert files to JSON/text
  * Supports DOCX, XML, YML, XLSX, CSV, PDF, TXT, PPTX, HTML
  */
-export class FileToJsonNode implements INodeType {
+export class ConvertFileToJson implements INodeType {
   description: INodeTypeDescription = {
     displayName: "Convert File to JSON",
     name: "convertFileToJson",
@@ -443,3 +443,5 @@ export class FileToJsonNode implements INodeType {
     }]];
   }
 }
+
+export { ConvertFileToJson as FileToJsonNode };

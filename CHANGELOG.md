@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.4.1] - 2026-08-12
+
+### Fixed
+
+- Restored the n8n node-loader contract by exporting `ConvertFileToJson` from `dist/ConvertFileToJson.node.js`, while retaining `FileToJsonNode` as a backwards-compatible alias.
+
+### Tests
+
+- Added a regression test that verifies the compiled node entry point exports the class name derived by n8n from the file name.
+
 ## [1.4.0] - 2026-07-15
 
 ### Added
