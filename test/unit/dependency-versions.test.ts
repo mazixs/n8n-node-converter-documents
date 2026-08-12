@@ -23,9 +23,9 @@ describe('production dependency versions', () => {
     expect(declaredVersion).toBe(officeParserManifest.version);
   });
 
-  it('loads file-type through CommonJS and detects a PDF signature', () => {
+  it('loads file-type through the native ESM bridge and detects a PDF signature', () => {
     const script = [
-      "const { fileTypeFromBuffer } = require('file-type');",
+      "const { fileTypeFromBuffer } = require('./src/file-type-loader');",
       "fileTypeFromBuffer(Buffer.from('%PDF-1.7\\n')).then((type) => process.stdout.write(type?.ext || ''));",
     ].join('\n');
 

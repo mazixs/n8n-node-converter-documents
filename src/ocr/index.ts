@@ -6,7 +6,7 @@ import { loadOcrDependencies } from './loader';
 interface PdfDocument {
   length: number;
   getPage(pageNumber: number): Promise<Buffer>;
-  destroy(): Promise<void>;
+  destroy?(): Promise<void>;
 }
 
 interface PdfModule {
@@ -180,7 +180,7 @@ export class TesseractOcrEngine implements OcrEngine {
     } finally {
       const cleanupOperations: Promise<unknown>[] = [];
       if (worker) cleanupOperations.push(worker.terminate());
-      if (document) cleanupOperations.push(document.destroy());
+      if (document?.destroy) cleanupOperations.push(document.destroy());
       await Promise.allSettled(cleanupOperations);
     }
   }

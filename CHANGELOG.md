@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.4.2] - 2026-08-12
+
+### Fixed
+
+- Fixed in-place updates from 1.2.2 by giving dependencies whose entry points changed (`file-type` and `node-html-parser`) fresh local package names. This prevents Node.js from reusing stale module paths while n8n replaces the package in a running process.
+- Kept `file-type` loading through a native ESM bridge so the CommonJS node entry point remains compatible with its ESM-only release.
+- Made OCR cleanup compatible with `pdf-to-img` releases both with and without a document `destroy()` method.
+
+### Security
+
+- Updated `fast-xml-parser` to 5.10.1 and selected audited PDF parser versions. Both the production and complete dependency audits report no known vulnerabilities at release preparation time.
+
+### Tests
+
+- Added an in-process regression test that primes the 1.2.2 dependency paths, replaces them with the current package layout, and verifies node loading plus real file-signature detection.
+- Verified the exact n8n shallow-install update sequence from 1.2.2 in Node.js 24, including the retained version 5 node identity and the new version 6 implementation.
+
 ## [1.4.1] - 2026-08-12
 
 ### Fixed

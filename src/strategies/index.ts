@@ -1,7 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
 import mammoth from "mammoth";
 import readXlsxFile from "read-excel-file/node";
-import { parse as parseHtml } from "node-html-parser";
+import { parse as parseHtml } from 'node-html-parser-modern';
 import chardet from "chardet";
 import Papa from "papaparse";
 import { NodeHtmlMarkdown } from "node-html-markdown";

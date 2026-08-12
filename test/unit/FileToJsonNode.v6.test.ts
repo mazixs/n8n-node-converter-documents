@@ -1,13 +1,13 @@
 import type { IExecuteFunctions, INodeExecutionData } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
-import { fileTypeFromBuffer } from 'file-type';
+import { fileTypeFromBuffer } from '../../src/file-type-loader';
 import fs from 'fs';
 import path from 'path';
 
 import { FileToJsonNode } from '../../src/ConvertFileToJson.node';
 import { strategies } from '../../src/strategies';
 
-jest.mock('file-type', () => ({
+jest.mock('../../src/file-type-loader', () => ({
   fileTypeFromBuffer: jest.fn(),
 }));
 

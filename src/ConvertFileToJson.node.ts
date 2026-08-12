@@ -8,7 +8,7 @@
  */
 
 import path from "path";
-import { fileTypeFromBuffer } from "file-type";
+import { fileTypeFromBuffer } from './file-type-loader';
 
 import {
   IExecuteFunctions,

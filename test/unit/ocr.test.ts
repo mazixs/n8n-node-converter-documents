@@ -56,6 +56,26 @@ describe('Tesseract OCR engine', () => {
     expect(destroy).toHaveBeenCalledTimes(1);
   });
 
+  it('supports renderer documents that do not expose destroy', async () => {
+    mockPdf.mockResolvedValue({
+      length: 1,
+      getPage: jest.fn(async () => Buffer.from('page')),
+    });
+    const terminate = jest.fn(async () => undefined);
+    mockCreateWorker.mockResolvedValue({
+      recognize: jest.fn(async () => ({ data: { text: 'text', confidence: 80 } })),
+      terminate,
+    });
+
+    const result = await new TesseractOcrEngine().recognizePdf(
+      Buffer.from('pdf'),
+      defaultOptions,
+    );
+
+    expect(result.text).toContain('text');
+    expect(terminate).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects invalid language codes before loading OCR dependencies', async () => {
     await expect(new TesseractOcrEngine().recognizePdf(Buffer.from('pdf'), {
       ...defaultOptions,

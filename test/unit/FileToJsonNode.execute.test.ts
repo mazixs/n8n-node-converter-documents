@@ -1,12 +1,12 @@
 import type { IExecuteFunctions } from 'n8n-workflow';
-import { fileTypeFromBuffer } from 'file-type';
+import { fileTypeFromBuffer } from '../../src/file-type-loader';
 
 import { strategies } from '../../src/strategies';
 import { EmptyFileError, UnsupportedFormatError } from '../../src/errors';
 import { FileToJsonNode } from '../../src/ConvertFileToJson.node';
 import { validateZipArchive } from '../../src/security/archive';
 
-jest.mock('file-type', () => ({
+jest.mock('../../src/file-type-loader', () => ({
   fileTypeFromBuffer: jest.fn(),
 }));
 

@@ -1,6 +1,6 @@
 {
   "name": "@mazix/n8n-nodes-converter-documents",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "n8n node to convert various document formats (DOCX, DOC, XML, YML, XLSX, CSV, PDF, TXT, PPT, PPTX, HTML, JSON, ODT, ODP, ODS) to JSON or text format",
   "main": "dist/ConvertFileToJson.node.js",
   "files": [
@@ -9,7 +9,7 @@
     "dist/**/*.svg"
   ],
   "scripts": {
-    "build": "rimraf dist && tsc && node -e \"const fs=require('fs');fs.cpSync('src/icon.svg','dist/icon.svg');fs.cpSync('src/ocr/loader.js','dist/ocr/loader.js')\"",
+    "build": "rimraf dist && tsc && node -e \"const fs=require('fs');fs.cpSync('src/icon.svg','dist/icon.svg');fs.cpSync('src/file-type-loader.js','dist/file-type-loader.js');fs.cpSync('src/ocr/loader.js','dist/ocr/loader.js')\"",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -59,13 +59,14 @@
   "homepage": "https://github.com/mazixs/n8n-node-converter-documents#readme",
   "dependencies": {
     "chardet": "^2.2.0",
-    "fast-xml-parser": "^5.10.0",
-    "file-type": "^22.0.1",
+    "fast-xml-parser": "5.10.1",
+    "file-type-modern": "npm:file-type@22.0.1",
     "mammoth": "^1.12.0",
     "node-html-markdown": "^2.0.0",
-    "node-html-parser": "^9.0.0",
-    "officeparser": "7.3.0",
+    "node-html-parser-modern": "npm:node-html-parser@9.0.0",
+    "officeparser": "6.0.7",
     "papaparse": "^5.5.4",
+    "pdfjs-dist": "5.5.207",
     "read-excel-file": "8.0.3",
     "yauzl": "^3.4.0"
   },
@@ -95,7 +96,10 @@
     ]
   },
   "optionalDependencies": {
-    "pdf-to-img": "^6.2.0",
+    "pdf-to-img": "5.0.0",
     "tesseract.js": "^7.0.0"
+  },
+  "overrides": {
+    "nanoid": "3.3.18"
   }
 }
