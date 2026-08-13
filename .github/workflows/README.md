@@ -12,9 +12,11 @@
 
 `publish-npm.yml` is the reusable publication workflow. After `auto-release.yml` creates a new GitHub Release, it checks out the matching tag, verifies and tests it on Node.js 24, runs the production audit and npm archive check, and publishes the package.
 
-The workflow authenticates through the repository secret `NPM_TOKEN`. Configure it in GitHub under **Settings → Secrets and variables → Actions → New repository secret**. The token must have publish access to `@mazix/n8n-nodes-converter-documents` and be compatible with the npm account's two-factor authentication policy.
+The workflow authenticates through the repository secret `NPM_TOKEN`. Configure it in GitHub under **Settings → Secrets and variables → Actions → New repository secret**. Create a Granular Access Token on npm with publish access to `@mazix/n8n-nodes-converter-documents` and enable **Bypass 2FA** for that token. A regular token is accepted by GitHub but npm will stop the publish with `EOTP`.
 
-The token is passed only as `NODE_AUTH_TOKEN` to the npm publish job. It is not stored in the repository, written to source files, or printed in the workflow summary. The workflow grants only `contents: read`.
+The token is passed only as `NODE_AUTH_TOKEN` to the npm publish step. It is not stored in the repository, written to source files, or printed in the workflow summary. The workflow grants only `contents: read`.
+
+Trusted Publishing through npm OIDC is a more secure alternative and does not require `NPM_TOKEN`; it must be configured on the package at npmjs.com and requires `id-token: write` in the publishing workflow. The current workflow uses `NPM_TOKEN` because this repository is configured for token-based publication.
 
 The pull request and push CI remains separate from publication: it runs the Node.js 22.22/24 matrix, audit, lint, build, typecheck, coverage, and archive checks. A push to `main` then follows this order:
 
