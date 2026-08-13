@@ -6,9 +6,41 @@ const pdfWorkerSrc = createRequire(__filename).resolve(
   'pdfjs-dist/legacy/build/pdf.worker.mjs',
 );
 
+type PdfJsWorkerModule = { WorkerMessageHandler?: unknown };
+
+type PdfJsModule = {
+  PDFWorker?: {
+    _setupFakeWorkerGlobal?: Promise<unknown>;
+  };
+};
+
 type PdfJsWorkerGlobal = typeof globalThis & { pdfjsWorker?: unknown };
 
 let pdfParseQueue: Promise<void> = Promise.resolve();
+
+export function refreshPdfJsWorkerCache(
+  pdfjs: PdfJsModule,
+  worker: PdfJsWorkerModule,
+): void {
+  if (!pdfjs.PDFWorker || !worker.WorkerMessageHandler) return;
+
+  Object.defineProperty(pdfjs.PDFWorker, '_setupFakeWorkerGlobal', {
+    value: Promise.resolve(worker.WorkerMessageHandler),
+    configurable: true,
+    writable: true,
+  });
+}
+
+function refreshInstalledPdfJsWorker(): void {
+  try {
+    const requireFromHelper = createRequire(__filename);
+    const pdfjs = requireFromHelper('pdfjs-dist/legacy/build/pdf.mjs') as PdfJsModule;
+    const worker = requireFromHelper(pdfWorkerSrc) as PdfJsWorkerModule;
+    refreshPdfJsWorkerCache(pdfjs, worker);
+  } catch {
+    // OfficeParser still receives an explicit worker path below.
+  }
+}
 
 /**
  * Извлекает текст из буфера с помощью officeparser
@@ -39,6 +71,7 @@ export async function extractViaOfficeParser(
   globalObject.pdfjsWorker = undefined;
 
   try {
+    refreshInstalledPdfJsWorker();
     const ast = await parseOffice(buffer, { pdfWorkerSrc });
     return ast.toText();
   } finally {

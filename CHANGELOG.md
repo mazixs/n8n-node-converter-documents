@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.5] - 2026-08-13
+
+### Fixed
+
+- Completed the PDF.js in-place update fix. Version 1.4.4 isolated the stale `globalThis.pdfjsWorker`, but PDF.js could still retain the old `WorkerMessageHandler` in its internal `_setupFakeWorkerGlobal` cache. Before each PDF parse, the node now refreshes that cache from the worker shipped with the current package.
+- Fixed the exact n8n transition where the running process had loaded `pdfjs-dist@5.4.530` before the package with `pdfjs-dist@5.5.207`. The worker cache is now verified as `5.5.207` before parsing.
+
+### Tests
+
+- Added a regression test for replacing a stale cached fake worker.
+- Reproduced the stale-cache state on the n8n LXC host with Node.js 24.19.0 and verified successful PDF extraction with the candidate build.
+
 ## [1.4.4] - 2026-08-13
 
 ### Added

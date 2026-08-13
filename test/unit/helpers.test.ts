@@ -1,4 +1,4 @@
-import { extractViaOfficeParser } from '../../src/helpers';
+import { extractViaOfficeParser, refreshPdfJsWorkerCache } from '../../src/helpers';
 import fs from 'fs';
 
 // Mock officeparser module (v6 API: parseOffice returns AST with toText())
@@ -15,6 +15,21 @@ describe('helpers', () => {
   });
 
   describe('extractViaOfficeParser', () => {
+    it('replaces the cached fake worker with the current PDF.js worker', async () => {
+      const staleWorker = { version: '5.4.530' };
+      const currentWorker = { WorkerMessageHandler: { version: '5.5.207' } };
+      const pdfjs = {
+        PDFWorker: {
+          _setupFakeWorkerGlobal: Promise.resolve(staleWorker),
+        },
+      };
+
+      refreshPdfJsWorkerCache(pdfjs, currentWorker);
+
+      await expect(pdfjs.PDFWorker._setupFakeWorkerGlobal)
+        .resolves.toBe(currentWorker.WorkerMessageHandler);
+    });
+
     it('should extract text successfully', async () => {
       const expectedText = 'extracted text from office file';
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

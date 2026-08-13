@@ -4,7 +4,7 @@
 [![CI](https://github.com/mazixs/n8n-node-converter-documents/actions/workflows/ci.yml/badge.svg)](https://github.com/mazixs/n8n-node-converter-documents/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-Community node for converting documents into text or structured sheet data inside self-hosted n8n. Version 1.4.0 adds node version 6, bounded processing, ZIP-container checks, and optional local OCR for scanned PDFs. Version 1.4.4 fixes PDF.js worker conflicts after an in-place update and adds direct Markdown (`.md` / `.markdown`) input support.
+Community node for converting documents into text or structured sheet data inside self-hosted n8n. Version 1.4.0 adds node version 6, bounded processing, ZIP-container checks, and optional local OCR for scanned PDFs. Version 1.4.5 completes the PDF.js worker-cache fix for in-place n8n updates and includes direct Markdown (`.md` / `.markdown`) input support.
 
 ## Requirements and installation
 
