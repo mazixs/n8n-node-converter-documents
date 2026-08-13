@@ -1,7 +1,7 @@
 {
   "name": "@mazix/n8n-nodes-converter-documents",
-  "version": "1.4.5",
-  "description": "n8n community node that extracts text, HTML or Markdown from documents (DOCX, PDF, ODT, TXT, MD, PPTX, ODP, HTML), named sheets with row objects from spreadsheets (XLSX, CSV, ODS), and structured data from JSON, XML and Yandex Market YML, with optional local OCR for scanned PDFs",
+  "version": "1.5.0",
+  "description": "n8n community node that extracts text, HTML or Markdown from documents (DOCX, PDF, ODT, ODS, ODP, TXT, MD, PPTX, HTML), named sheets with row objects from spreadsheets (XLSX, CSV), and structured data from JSON, XML and Yandex Market YML, with optional local OCR for scanned PDFs",
   "main": "dist/ConvertFileToJson.node.js",
   "files": [
     "dist/**/*.js",
