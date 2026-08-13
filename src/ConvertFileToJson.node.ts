@@ -99,7 +99,7 @@ export class ConvertFileToJson implements INodeType {
         displayOptions: { show: { '@version': [5] } },
       },
       {
-        displayName: "Output Format (DOCX)",
+        displayName: "Output Format",
         name: "outputFormat",
         type: "options",
         options: [
