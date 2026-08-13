@@ -26,27 +26,11 @@ import {
   ProcessingError,
 } from "./errors";
 import { sanitizeFileName, promisePool } from "./utils";
+import { isStrategyResult, isSupportedFormat } from "./utils/formatGuards";
 import { strategies } from "./strategies";
 import { executeV6 } from './pipeline/v6';
 import { validateZipArchive } from './security/archive';
 import type { DocxOutputFormat, JsonResult, StrategyResult } from "./types";
-
-function isSupportedFormat(extension: string): extension is keyof typeof strategies {
-  return Object.prototype.hasOwnProperty.call(strategies, extension);
-}
-
-function isStrategyResult(value: unknown): value is StrategyResult {
-  if (!value || typeof value !== 'object') return false;
-
-  const result = value as Record<string, unknown>;
-  const hasText = typeof result.text === 'string';
-  const hasSheets = Boolean(
-    result.sheets && typeof result.sheets === 'object' && !Array.isArray(result.sheets),
-  );
-  const hasValidWarning = result.warning === undefined || typeof result.warning === 'string';
-
-  return hasValidWarning && hasText !== hasSheets;
-}
 
 /**
  * Custom n8n node: convert files to JSON/text
@@ -54,15 +38,25 @@ function isStrategyResult(value: unknown): value is StrategyResult {
  */
 export class ConvertFileToJson implements INodeType {
   description: INodeTypeDescription = {
-    displayName: "Convert File to JSON",
+    displayName: "Convert Document",
     name: "convertFileToJson",
     icon: "file:icon.svg",
     group: ["transform"],
     version: [5, 6],
     description:
-      "DOCX / XML / YML / XLSX / CSV / PDF / TXT / MD / PPTX / HTML → JSON|text",
-    subtitle: 'Document → JSON/Text',
-    defaults: { name: "Convert File to JSON" },
+      "Extracts text, HTML, or Markdown from documents (DOCX, PDF, PPTX, ODT, HTML, TXT, MD) and reads table rows from spreadsheets (XLSX, CSV), " +
+      "also parsing JSON, XML, and Yandex Market YML into structured data",
+    // Output Format only affects DOCX parsing, so only advertise it on the canvas
+    // when the user picked a non-default value (html/markdown); for every other
+    // format the parameter is a no-op and showing it would be misleading — the
+    // same reason "DOCX" was dropped from the node's own name. OCR mode is
+    // independent and only exists on v6, hence the `$parameter["ocrMode"] &&` guard.
+    subtitle: '=' +
+      '{{[' +
+      '($parameter["outputFormat"] === "html" || $parameter["outputFormat"] === "markdown") ? "Format: " + $parameter["outputFormat"] : null,' +
+      '($parameter["ocrMode"] && $parameter["ocrMode"] !== "disabled") ? "OCR: " + $parameter["ocrMode"] : null' +
+      '].filter(Boolean).join(" · ")}}',
+    defaults: { name: "Convert Document" },
     inputs: [NodeConnectionTypes.Main],
     outputs: [NodeConnectionTypes.Main],
     usableAsTool: true,
@@ -368,12 +362,16 @@ export class ConvertFileToJson implements INodeType {
 
       const startTime = performance.now();
       let strategyResult: StrategyResult;
-      const strategy = isSupportedFormat(ext) ? strategies[ext] : undefined;
-
-      if (!strategy) {
+      // `ext` is already guaranteed to be a supported format by the autodetect
+      // block above (either as-declared, or replaced with a validated detected
+      // extension). `isSupportedFormat` narrows the type for TypeScript instead
+      // of forcing an `as` cast, and the throw below is a safety net in case
+      // that invariant is ever broken by a future change to the autodetect logic.
+      if (!isSupportedFormat(ext)) {
         throw new UnsupportedFormatError(`Format "${ext}" is not supported`);
       }
-      
+      const strategy = strategies[ext];
+
       try {
         const options = ext === 'docx'
           ? { outputFormat: this.getNodeParameter('outputFormat', i, 'text') as DocxOutputFormat }

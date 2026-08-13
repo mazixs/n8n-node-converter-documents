@@ -100,6 +100,18 @@ describe('YML Processor Unit Tests', () => {
     expect(catalog.statistics.total_categories).toBe(2);
     expect(catalog.statistics.total_offers).toBe(1);
     expect(catalog.statistics.available_offers).toBe(1);
+
+    // `data` (default includeData=true) must be the exact object serialized into `text`.
+    expect(result.data).toEqual(JSON.parse(result.text!));
+  });
+
+  test('omits data when includeData is explicitly false', () => {
+    const parser = new XMLParser({ ignoreAttributes: false });
+    const parsed = parser.parse(sampleYmlXml);
+    const result = processYandexMarketYml(parsed, false);
+
+    expect('data' in result).toBe(false);
+    expect(typeof result.text).toBe('string');
   });
 
   test('should handle empty sections gracefully', () => {
@@ -161,5 +173,28 @@ describe('YML Processor Unit Tests', () => {
     expect(catalog.offers[0].deliveryOptions[0]).toEqual(expect.objectContaining({ cost: 0, days: 0 }));
     expect(catalog.statistics.available_offers).toBe(0);
     expect(catalog.statistics.unavailable_offers).toBe(1);
+  });
+
+  test('should use null (not "[object Object]") for params and categories without a text value', () => {
+    const parsed = {
+      yml_catalog: {
+        shop: {
+          name: 'No Text Shop',
+          categories: { category: { '@_id': '1' } },
+          offers: {
+            offer: {
+              id: '1',
+              param: { '@_name': 'Цвет' },
+            },
+          },
+        },
+      },
+    } as unknown as YmlCatalog;
+
+    const result = processYandexMarketYml(parsed);
+    const catalog = JSON.parse(result.text).yandex_market_catalog;
+
+    expect(catalog.categories[0].name).toBeNull();
+    expect(catalog.offers[0].parameters[0].value).toBeNull();
   });
 });

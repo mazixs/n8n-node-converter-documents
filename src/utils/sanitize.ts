@@ -8,8 +8,12 @@ export function sanitizeFileName(fileName: string): string {
     return 'unknown_file';
   }
   
-  // Проверка на path traversal
-  if (fileName.includes('..') || fileName.includes('/') || fileName.includes('\\')) {
+  // Проверка на path traversal: запрещаем разделители путей и сегмент "..",
+  // но не любую подстроку ".." внутри легального имени (например "report..v2.pdf").
+  if (fileName.includes('/') || fileName.includes('\\')) {
+    throw new FileTypeError('Invalid file name: contains path traversal characters');
+  }
+  if (fileName === '..') {
     throw new FileTypeError('Invalid file name: contains path traversal characters');
   }
   

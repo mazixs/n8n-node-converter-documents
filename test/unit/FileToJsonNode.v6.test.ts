@@ -18,6 +18,7 @@ jest.mock('../../src/strategies', () => ({
     pdf: jest.fn(),
     docx: jest.fn(),
     json: jest.fn(),
+    xml: jest.fn(),
     xlsx: jest.fn(),
     csv: jest.fn(),
   },
@@ -215,6 +216,89 @@ describe('FileToJsonNode version 6', () => {
     );
   });
 
+  it('surfaces the strategy-provided structured data alongside text for JSON input', async () => {
+    const ctx = createContext({
+      items: [{ json: {}, binary: { data: binary('nested.json') } }],
+      buffers: [Buffer.from('{"nested":{"value":1}}')],
+    });
+    const parsed = { nested: { value: 1 } };
+    mockStrategies.json.mockResolvedValue({ text: '{"nested":{"value":1}}', data: parsed });
+
+    const [output] = await node.execute.call(ctx as unknown as IExecuteFunctions);
+    const document = output[0].json.document as { text: string; data: unknown };
+
+    expect(document.text).toBe('{"nested":{"value":1}}');
+    expect(document.data).toEqual(parsed);
+  });
+
+  it('surfaces the strategy-provided structured data alongside text for XML input', async () => {
+    const ctx = createContext({
+      items: [{ json: {}, binary: { data: binary('doc.xml') } }],
+      buffers: [Buffer.from('<root><value>42</value></root>')],
+    });
+    const parsed = { root: { value: 42 } };
+    mockStrategies.xml.mockResolvedValue({ text: '{"root":{"value":42}}', data: parsed });
+
+    const [output] = await node.execute.call(ctx as unknown as IExecuteFunctions);
+    const document = output[0].json.document as { text: string; data: unknown };
+
+    expect(document.text).toBe('{"root":{"value":42}}');
+    expect(document.data).toEqual(parsed);
+  });
+
+  it('does not add a data key for formats that only produce text, such as DOCX', async () => {
+    const buffer = fs.readFileSync(path.join(__dirname, '../samples/sample4.docx'));
+    const ctx = createContext({
+      items: [{ json: {}, binary: { data: binary('report.docx') } }],
+      buffers: [buffer],
+    });
+    mockStrategies.docx.mockResolvedValue({ text: 'plain docx text' });
+
+    const [output] = await node.execute.call(ctx as unknown as IExecuteFunctions);
+    const document = output[0].json.document as Record<string, unknown>;
+
+    expect(document.text).toBe('plain docx text');
+    expect('data' in document).toBe(false);
+  });
+
+  it('does not add a data key for formats that only produce text, such as PDF', async () => {
+    const ctx = createContext({
+      items: [{ json: {}, binary: { data: binary('scan.pdf') } }],
+      buffers: [Buffer.from('%PDF-1.4')],
+    });
+    mockFileTypeFromBuffer.mockResolvedValue({ ext: 'pdf', mime: 'application/pdf' });
+    mockStrategies.pdf.mockResolvedValue({ text: 'plain pdf text' });
+
+    const [output] = await node.execute.call(ctx as unknown as IExecuteFunctions);
+    const document = output[0].json.document as Record<string, unknown>;
+
+    expect(document.text).toBe('plain pdf text');
+    expect('data' in document).toBe(false);
+  });
+
+  it('rejects structured data that exceeds the global output limit, even when text fits', async () => {
+    const ctx = createContext({
+      items: [{ json: {}, binary: { data: binary('big.json') } }],
+      buffers: [Buffer.from('{"a":1}')],
+      params: { advancedOptions: { maxOutputChars: 10 } },
+      continueOnFail: true,
+    });
+    // `text` alone is short enough to pass the limit, but `data` mirrors a much
+    // larger object — it must not leak past the limit that constrains `text`.
+    mockStrategies.json.mockResolvedValue({
+      text: '{"a":1}',
+      data: { a: 'x'.repeat(1000) },
+    });
+
+    const [output] = await node.execute.call(ctx as unknown as IExecuteFunctions);
+    const document = output[0].json.document as { error: { stage: string; code: string } };
+
+    expect(document.error).toMatchObject({
+      stage: 'normalize',
+      code: 'OUTPUT_LIMIT_EXCEEDED',
+    });
+  });
+
   it('truncates oversized text output using the global output limit', async () => {
     const ctx = createContext({
       params: { advancedOptions: { maxOutputChars: 5 } },
@@ -244,6 +328,45 @@ describe('FileToJsonNode version 6', () => {
       stage: 'normalize',
       code: 'OUTPUT_LIMIT_EXCEEDED',
     });
+  });
+
+  it('rejects an oversized structured output without ever serializing it as one huge string', async () => {
+    const originalStringify = JSON.stringify;
+    const producedLengths: number[] = [];
+    const stringifySpy = jest.spyOn(JSON, 'stringify').mockImplementation((value, ...rest) => {
+      const result = originalStringify(value, ...(rest as []));
+      if (typeof result === 'string') producedLengths.push(result.length);
+      return result;
+    });
+
+    try {
+      const bigRow = { A: 'x'.repeat(1000) };
+      const rows = Array.from({ length: 2000 }, () => ({ ...bigRow }));
+      // Full sheets payload would serialize to roughly 2,000,000+ characters.
+      const fullSerializedLength = originalStringify({ Sheet1: rows }).length;
+      expect(fullSerializedLength).toBeGreaterThan(1_000_000);
+
+      const ctx = createContext({
+        items: [{ json: {}, binary: { data: binary('large.csv') } }],
+        buffers: [Buffer.from('csv')],
+        params: { advancedOptions: { maxOutputChars: 100 } },
+        continueOnFail: true,
+      });
+      mockStrategies.csv.mockResolvedValue({ sheets: { Sheet1: rows } });
+
+      const [output] = await node.execute.call(ctx as unknown as IExecuteFunctions);
+      const document = output[0].json.document as { error: { stage: string; code: string } };
+
+      expect(document.error).toMatchObject({
+        stage: 'normalize',
+        code: 'OUTPUT_LIMIT_EXCEEDED',
+      });
+      // Proves the limit check never materialized the full payload as a single string:
+      // every intermediate string produced while checking the limit stayed small.
+      expect(Math.max(...producedLengths)).toBeLessThan(fullSerializedLength / 10);
+    } finally {
+      stringifySpy.mockRestore();
+    }
   });
 
   it('reports the file-size limit at the check_limits stage', async () => {

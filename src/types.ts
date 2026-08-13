@@ -11,6 +11,12 @@ export interface FileMetadata {
 
 export interface StrategyTextResult {
   text: string;
+  /**
+   * Already-parsed structured representation of `text`, when the strategy parses
+   * structured input (JSON/XML/YML). Must stay in sync with `text` — same
+   * jsonMode, same content — so callers do not have to re-parse the string.
+   */
+  data?: unknown;
   warning?: string;
 }
 
@@ -32,6 +38,14 @@ export interface StrategyOptions {
   jsonMode?: JsonOutputMode;
   maxRows?: number;
   maxTextChars?: number;
+  /**
+   * Explicit opt-in for the structured `data` field on json/xml/yml results.
+   * Only the version-6 pipeline sets this to `true`. It must never be inferred
+   * from whether `options` itself is defined — that would silently start
+   * leaking `data` into version 5's output the moment v5 starts passing any
+   * other option (e.g. `maxRows`) to a strategy.
+   */
+  includeParsedData?: boolean;
 }
 
 export type StrategyFn = (

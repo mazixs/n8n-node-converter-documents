@@ -22,6 +22,11 @@ function getTextResult(result: Partial<JsonResult>): string {
   return result.text;
 }
 
+/** `data` only exists on the text-result branch of the `StrategyResult` union. */
+function getData(result: Partial<JsonResult>): unknown {
+  return (result as { data?: unknown }).data;
+}
+
 describe('File Processing Strategies (real src/strategies implementation)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -29,7 +34,15 @@ describe('File Processing Strategies (real src/strategies implementation)', () =
 
   it('json strategy should flatten nested object and add warning', async () => {
     const input = { user: { name: 'John', address: { city: 'Moscow' } }, age: 30 };
-    const result = await strategies.json(Buffer.from(JSON.stringify(input), 'utf8'));
+    const strategy = strategies.json as unknown as ConfigurableStrategy;
+    // `includeParsedData: true` is how the v6 pipeline opts into `data` — see the
+    // "omits data" test below for the v5-style call (no options at all, so the
+    // flag defaults to falsy), which must NOT include `data`.
+    const result = await strategy(
+      Buffer.from(JSON.stringify(input), 'utf8'),
+      'json',
+      { includeParsedData: true },
+    );
 
     const text = getTextResult(result);
     const parsed = JSON.parse(text);
@@ -40,6 +53,28 @@ describe('File Processing Strategies (real src/strategies implementation)', () =
       age: 30,
     });
     expect(result.warning).toBe('Многоуровневая структура JSON была преобразована в плоский объект');
+    // `data` must be the same flattened object that was serialized into `text`,
+    // not the original nested input, so downstream nodes never re-parse `text`.
+    expect(getData(result)).toEqual(parsed);
+  });
+
+  it('json strategy omits data when called without options (the v5 execute path)', async () => {
+    const input = { nested: { value: 1 } };
+    const result = await strategies.json(Buffer.from(JSON.stringify(input), 'utf8'));
+
+    expect('data' in result).toBe(false);
+  });
+
+  it('json strategy omits data when options are present but includeParsedData is not set', async () => {
+    // Regression guard for the explicit-contract fix: merely passing an options
+    // object (e.g. `maxRows`, unrelated to json at all) must not turn on `data`.
+    // Only `includeParsedData: true` may.
+    const input = { nested: { value: 1 } };
+    const strategy = strategies.json as unknown as ConfigurableStrategy;
+
+    const result = await strategy(Buffer.from(JSON.stringify(input), 'utf8'), 'json', { maxRows: 5 });
+
+    expect('data' in result).toBe(false);
   });
 
   it('json strategy preserves nested structure when configured', async () => {
@@ -49,11 +84,12 @@ describe('File Processing Strategies (real src/strategies implementation)', () =
     const result = await strategy(
       Buffer.from(JSON.stringify(input), 'utf8'),
       'json',
-      { jsonMode: 'preserve' },
+      { jsonMode: 'preserve', includeParsedData: true },
     );
 
     expect(JSON.parse(getTextResult(result))).toEqual(input);
     expect(result.warning).toBeUndefined();
+    expect(getData(result)).toEqual(input);
   });
 
   it('json strategy should throw ProcessingError on invalid JSON', async () => {
@@ -68,11 +104,24 @@ describe('File Processing Strategies (real src/strategies implementation)', () =
   });
 
   it('xml strategy should parse XML into pretty JSON text', async () => {
-    const result = await strategies.xml(Buffer.from('<root><value>42</value></root>', 'utf8'));
+    const strategy = strategies.xml as unknown as ConfigurableStrategy;
+    const result = await strategy(
+      Buffer.from('<root><value>42</value></root>', 'utf8'),
+      'xml',
+      { includeParsedData: true },
+    );
 
     const text = getTextResult(result);
     const parsed = JSON.parse(text);
     expect(parsed).toEqual({ root: { value: 42 } });
+    // `data` reuses the already-parsed object instead of re-parsing `text`.
+    expect(getData(result)).toEqual(parsed);
+  });
+
+  it('xml strategy omits data when called without options (the v5 execute path)', async () => {
+    const result = await strategies.xml(Buffer.from('<root><value>1</value></root>', 'utf8'));
+
+    expect('data' in result).toBe(false);
   });
 
   it('xml strategy limits custom entity expansion', async () => {
@@ -81,6 +130,36 @@ describe('File Processing Strategies (real src/strategies implementation)', () =
 
     await expect(strategies.xml(Buffer.from(xml, 'utf8')))
       .rejects.toThrow(/entity expansion count limit/i);
+  });
+
+  it('yml strategy returns the parsed object as data for a non-Yandex-Market catalog', async () => {
+    const strategy = strategies.yml as unknown as ConfigurableStrategy;
+    const result = await strategy(
+      Buffer.from('<root><value>1</value></root>', 'utf8'),
+      'yml',
+      { includeParsedData: true },
+    );
+
+    const text = getTextResult(result);
+    expect(getData(result)).toEqual(JSON.parse(text));
+  });
+
+  it('yml strategy returns the Yandex Market catalog object as data', async () => {
+    const xml = `<yml_catalog date="2024-01-15"><shop>
+      <name>Shop</name>
+      <offers><offer id="1" available="true"><name>Item</name></offer></offers>
+    </shop></yml_catalog>`;
+    const strategy = strategies.yml as unknown as ConfigurableStrategy;
+    const result = await strategy(Buffer.from(xml, 'utf8'), 'yml', { includeParsedData: true });
+
+    const text = getTextResult(result);
+    expect(getData(result)).toEqual(JSON.parse(text));
+  });
+
+  it('yml strategy omits data when called without options (the v5 execute path)', async () => {
+    const result = await strategies.yml(Buffer.from('<root><value>1</value></root>', 'utf8'));
+
+    expect('data' in result).toBe(false);
   });
 
   it('html strategy should extract clean body text', async () => {

@@ -74,7 +74,7 @@ function normalizeOffer(offer: YmlOffer): Record<string, unknown> {
 
   const parameters = asArray(offer.param).map((parameter) => ({
     name: firstDefined(parameter["@_name"], parameter.name),
-    value: firstDefined(parameter["#text"], parameter.value, String(parameter)),
+    value: firstDefined(parameter["#text"], parameter.value, null),
     unit: firstDefined(parameter["@_unit"], parameter.unit, null),
   }));
   if (parameters.length > 0) normalized.parameters = parameters;
@@ -82,8 +82,15 @@ function normalizeOffer(offer: YmlOffer): Record<string, unknown> {
   return normalized;
 }
 
-/** Преобразует YML-каталог Яндекс Маркета в удобный JSON. */
-export function processYandexMarketYml(parsed: YmlCatalog): StrategyTextResult {
+/**
+ * Преобразует YML-каталог Яндекс Маркета в удобный JSON.
+ *
+ * `includeData` controls whether the parsed object is also returned under
+ * `data` (v6-only structured output); defaults to `true` for direct callers
+ * such as tests, while the `yml` strategy passes it explicitly based on
+ * whether it was invoked from v5 or v6 (see `dataField` in strategies/index.ts).
+ */
+export function processYandexMarketYml(parsed: YmlCatalog, includeData = true): StrategyTextResult {
   try {
     const catalog = parsed.yml_catalog;
     const shop = catalog.shop;
@@ -95,7 +102,7 @@ export function processYandexMarketYml(parsed: YmlCatalog): StrategyTextResult {
 
     const categories = asArray(shop.categories?.category).map((category) => ({
       id: firstDefined(category["@_id"], category.id),
-      name: firstDefined(category["#text"], category.name, String(category)),
+      name: firstDefined(category["#text"], category.name, null),
       parentId: firstDefined(category["@_parentId"], category.parentId, null),
     }));
 
@@ -134,6 +141,7 @@ export function processYandexMarketYml(parsed: YmlCatalog): StrategyTextResult {
 
     return {
       text: JSON.stringify(result, null, 2),
+      ...(includeData ? { data: result } : {}),
       warning: offers.length > 1000 ? `Большой каталог: ${offers.length} товаров` : undefined,
     };
   } catch (error) {

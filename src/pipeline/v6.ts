@@ -18,6 +18,7 @@ import { ArchiveValidationError, validateZipArchive } from '../security/archive'
 import { strategies } from '../strategies';
 import type { DocxOutputFormat, StrategyResult } from '../types';
 import { promisePool, sanitizeFileName } from '../utils';
+import { isStrategyResult, isSupportedFormat } from '../utils/formatGuards';
 import { Semaphore } from '../utils/semaphore';
 
 export type PipelineStage =
@@ -42,21 +43,6 @@ export class PipelineFailure extends Error {
   }
 }
 
-function isSupportedFormat(extension: string): extension is keyof typeof strategies {
-  return Object.prototype.hasOwnProperty.call(strategies, extension);
-}
-
-function isStrategyResult(value: unknown): value is StrategyResult {
-  if (!value || typeof value !== 'object') return false;
-  const result = value as Record<string, unknown>;
-  const hasText = typeof result.text === 'string';
-  const hasSheets = Boolean(
-    result.sheets && typeof result.sheets === 'object' && !Array.isArray(result.sheets),
-  );
-  const hasValidWarning = result.warning === undefined || typeof result.warning === 'string';
-  return hasValidWarning && hasText !== hasSheets;
-}
-
 function converterErrorCode(error: unknown): string {
   if (error instanceof ArchiveValidationError) return error.code;
   if (error instanceof OcrError) return error.code;
@@ -65,6 +51,89 @@ function converterErrorCode(error: unknown): string {
   if (error instanceof EmptyFileError) return 'EMPTY_CONTENT';
   if (error instanceof FileTypeError) return 'INVALID_INPUT';
   return 'PROCESSING_FAILED';
+}
+
+/** Internal signal used to unwind recursion as soon as the length budget is exceeded. */
+class LengthLimitExceeded extends Error {}
+
+/** Whether `JSON.stringify` would drop this value entirely (as a bare value or object property). */
+function isOmittedByJson(value: unknown): boolean {
+  return value === undefined || typeof value === 'function' || typeof value === 'symbol';
+}
+
+function addLength(total: number, delta: number, limit: number): number {
+  const next = total + delta;
+  if (next > limit) throw new LengthLimitExceeded();
+  return next;
+}
+
+/**
+ * Adds the exact length that `JSON.stringify(value)` would contribute to `total`,
+ * throwing `LengthLimitExceeded` the moment the running total would cross `limit`.
+ * Mirrors `JSON.stringify`'s own rules: `undefined`/functions/symbols are dropped
+ * from objects and turned into `"null"` inside arrays; strings/numbers/booleans
+ * use their real serialized length (quoting, escaping, `NaN`/`Infinity` -> `null`).
+ */
+function accumulateLength(value: unknown, total: number, limit: number): number {
+  if (value === null) return addLength(total, 4, limit); // "null"
+  if (value instanceof Date) return addLength(total, JSON.stringify(value).length, limit);
+
+  switch (typeof value) {
+    case 'boolean':
+      return addLength(total, value ? 4 : 5, limit); // "true" / "false"
+    case 'number':
+      return addLength(total, Number.isFinite(value) ? JSON.stringify(value).length : 4, limit);
+    case 'string':
+      return addLength(total, JSON.stringify(value).length, limit);
+    case 'undefined':
+    case 'function':
+    case 'symbol':
+      // JSON.stringify(undefined) === undefined: contributes nothing as a bare value.
+      return total;
+    default:
+      break;
+  }
+
+  if (Array.isArray(value)) {
+    total = addLength(total, 2, limit); // "[" + "]"
+    let first = true;
+    for (const item of value) {
+      if (!first) total = addLength(total, 1, limit); // comma
+      first = false;
+      total = isOmittedByJson(item)
+        ? addLength(total, 4, limit) // array holes/undefined/functions/symbols -> "null"
+        : accumulateLength(item, total, limit);
+    }
+    return total;
+  }
+
+  // Plain object.
+  total = addLength(total, 2, limit); // "{" + "}"
+  let first = true;
+  for (const [key, propertyValue] of Object.entries(value as Record<string, unknown>)) {
+    if (isOmittedByJson(propertyValue)) continue; // key:value pair dropped entirely
+    if (!first) total = addLength(total, 1, limit); // comma
+    first = false;
+    total = addLength(total, JSON.stringify(key).length + 1, limit); // "key":
+    total = accumulateLength(propertyValue, total, limit);
+  }
+  return total;
+}
+
+/**
+ * Determines whether `JSON.stringify(value).length > limit` without ever
+ * materializing the full serialized string in memory: sums the exact serialized
+ * length property by property, item by item, and bails out via exception
+ * as soon as the running total crosses the limit. Used for both `sheets` and
+ * the structured `data` field.
+ */
+export function exceedsSerializedLength(value: unknown, limit: number): boolean {
+  try {
+    return accumulateLength(value, 0, limit) > limit;
+  } catch (error) {
+    if (error instanceof LengthLimitExceeded) return true;
+    throw error;
+  }
 }
 
 function toPipelineFailure(
@@ -165,6 +234,7 @@ export async function executeV6(this: IExecuteFunctions): Promise<INodeExecution
           jsonMode: this.getNodeParameter('jsonMode', index, 'preserve') as 'preserve' | 'flatten',
           maxRows: typeof advanced.maxRows === 'number' ? advanced.maxRows : 100_000,
           maxTextChars: typeof advanced.maxTextChars === 'number' ? advanced.maxTextChars : 1_000_000,
+          includeParsedData: true,
         });
       } catch (error) {
         if (error instanceof FileTypeError || error instanceof FileTooLargeError ||
@@ -212,7 +282,16 @@ export async function executeV6(this: IExecuteFunctions): Promise<INodeExecution
         warnings.push(`Output truncated to ${maxOutputChars} characters`);
       }
       if ('sheets' in strategyResult && maxOutputChars > 0 &&
-          JSON.stringify(strategyResult.sheets).length > maxOutputChars) {
+          exceedsSerializedLength(strategyResult.sheets, maxOutputChars)) {
+        throw new PipelineFailure(
+          `Structured output exceeds the ${maxOutputChars} character limit`,
+          'normalize',
+          'OUTPUT_LIMIT_EXCEEDED',
+          fileName,
+        );
+      }
+      if ('data' in strategyResult && strategyResult.data !== undefined && maxOutputChars > 0 &&
+          exceedsSerializedLength(strategyResult.data, maxOutputChars)) {
         throw new PipelineFailure(
           `Structured output exceeds the ${maxOutputChars} character limit`,
           'normalize',
