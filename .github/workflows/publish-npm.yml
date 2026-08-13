@@ -52,7 +52,10 @@ jobs:
       - name: Verify package
         run: |
           npm audit --omit=dev --audit-level=high
-          npm run test:ci
+          npm run lint
+          npm run typecheck
+          npm run build
+          npm run test:coverage
           npm run verify:package
 
       - name: Publish package
