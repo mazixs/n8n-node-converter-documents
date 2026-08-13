@@ -1,5 +1,34 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Node version 6 now exposes `document.data` next to `document.text` for JSON, XML and YML input, so downstream nodes no longer have to parse the serialized string again. `document.text` is unchanged, and the key is absent for formats that produce no structured value.
+
+### Changed
+
+- The node is now displayed as **Convert Document**. Its internal type name stays `convertFileToJson`, so existing workflows keep working without migration.
+- The DOCX-only suffix was dropped from the **Output Format** label; the DOCX scope is documented in the parameter description instead.
+- `read-excel-file` updated to 9.3.10 after verifying that the CommonJS entry point, the multi-sheet result shape and `dateFormat` behave identically to 8.0.3.
+
+### Fixed
+
+- File names containing a literal `..` inside the name, such as `report..v2.pdf`, were rejected as path traversal. Traversal is now detected by path segments and separators instead of a substring match.
+- Yandex Market YML entries without a text node produced the literal string `[object Object]` for a parameter value or category name; they now produce `null`.
+- XLSX row scanning stops once the per-sheet row limit is reached instead of walking every remaining row, and the truncation warning is raised only when data is actually dropped.
+- Encoding detection now samples the first 64 KB instead of analysing the whole buffer, which was expensive for large text files.
+- The `maxOutputChars` check for structured output no longer serializes the entire result just to measure its length.
+
+### Security
+
+- `pdfjs-dist` stays pinned to the exact version 5.5.207, which is outside the affected range of GHSA-hq66-cqwq-w95j (`>=5.6.83 <6.2.108`). No available combination of `officeparser` and `pdf-to-img` currently offers both a single deduplicated PDF.js copy and an unaffected version, so the duplicate copy is kept deliberately.
+- Added a dependency test that fails if any PDF.js copy in the tree falls inside that advisory range, or if the set of copies changes without a deliberate decision.
+
+### Tests
+
+- Added property-based coverage for the output-limit length calculation, a regression suite for file-name sanitization, encoding sampling, XLSX row-limit scanning, XLSX date-typed cells, the v5 output shape, and the node identity contract.
+
 ## [1.4.5] - 2026-08-13
 
 ### Fixed

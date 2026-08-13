@@ -31,7 +31,7 @@ npm install --omit=optional @mazix/n8n-nodes-converter-documents
 | Documents | DOCX, ODT, PDF, TXT, MD / Markdown | Text; DOCX also supports HTML and Markdown |
 | Spreadsheets | XLSX, ODS, CSV | Named sheets with row objects |
 | Presentations | PPTX, ODP | Extracted text |
-| Data and web | JSON, XML, YML, HTML, HTM | Text or normalized JSON text |
+| Data and web | JSON, XML, YML, HTML, HTM | Text, plus a parsed `document.data` object for JSON, XML and YML on node version 6 |
 
 Legacy binary DOC/PPT files are detected but rejected with migration guidance; save them as DOCX/PPTX first.
 
@@ -55,6 +55,8 @@ Version 6 emits one n8n item for every input file, preserves order and `pairedIt
   }
 }
 ```
+
+For JSON, XML and YML input the node additionally fills `document.data` with the parsed object, so a downstream node can read `$json.document.data.someField` instead of parsing `document.text` again. The key is absent for formats that produce no structured value, and `document.text` keeps its previous content in every case. The **Max Output Characters** limit applies to `document.data` as well.
 
 The source binary is omitted unless **Keep Source Binary** is enabled. With **Continue On Fail**, failed inputs remain in the ordered output with `status: "error"` and an error `stage`, `code`, `message`, and `fileName`. Otherwise n8n receives a `NodeOperationError`.
 
