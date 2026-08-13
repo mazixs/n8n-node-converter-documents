@@ -14,6 +14,7 @@ jest.mock('../../src/file-type-loader', () => ({
 jest.mock('../../src/strategies', () => ({
   strategies: {
     txt: jest.fn(),
+    md: jest.fn(),
     pdf: jest.fn(),
     docx: jest.fn(),
     json: jest.fn(),
@@ -156,6 +157,23 @@ describe('FileToJsonNode version 6', () => {
     const [output] = await node.execute.call(ctx as unknown as IExecuteFunctions);
 
     expect(output[0].binary).toBe(item.binary);
+  });
+
+  it('accepts Markdown files by extension when signature detection is inconclusive', async () => {
+    const ctx = createContext({
+      items: [{ json: {}, binary: { data: binary('README.md') } }],
+      buffers: [Buffer.from('# Title\n\nMarkdown body')],
+    });
+    mockStrategies.md.mockResolvedValue({ text: '# Title\n\nMarkdown body' });
+
+    const [output] = await node.execute.call(ctx as unknown as IExecuteFunctions);
+
+    expect(mockStrategies.md).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      'md',
+      expect.any(Object),
+    );
+    expect((output[0].json.document as { text: string }).text).toBe('# Title\n\nMarkdown body');
   });
 
   it('uses a detected supported type and reports an extension mismatch', async () => {

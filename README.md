@@ -4,7 +4,7 @@
 [![CI](https://github.com/mazixs/n8n-node-converter-documents/actions/workflows/ci.yml/badge.svg)](https://github.com/mazixs/n8n-node-converter-documents/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-Community node for converting documents into text or structured sheet data inside self-hosted n8n. Version 1.4.0 adds node version 6, bounded processing, ZIP-container checks, and optional local OCR for scanned PDFs. Version 1.4.3 fixes in-place updates from 1.2.2 in a running n8n process, including installations with nested OfficeParser dependencies.
+Community node for converting documents into text or structured sheet data inside self-hosted n8n. Version 1.4.0 adds node version 6, bounded processing, ZIP-container checks, and optional local OCR for scanned PDFs. Version 1.4.4 fixes PDF.js worker conflicts after an in-place update and adds direct Markdown (`.md` / `.markdown`) input support.
 
 ## Requirements and installation
 
@@ -28,7 +28,7 @@ npm install --omit=optional @mazix/n8n-nodes-converter-documents
 
 | Group | Formats | Result |
 | --- | --- | --- |
-| Documents | DOCX, ODT, PDF, TXT | Text; DOCX also supports HTML and Markdown |
+| Documents | DOCX, ODT, PDF, TXT, MD / Markdown | Text; DOCX also supports HTML and Markdown |
 | Spreadsheets | XLSX, ODS, CSV | Named sheets with row objects |
 | Presentations | PPTX, ODP | Extracted text |
 | Data and web | JSON, XML, YML, HTML, HTM | Text or normalized JSON text |

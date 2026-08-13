@@ -160,4 +160,12 @@ describe('File Processing Strategies (real src/strategies implementation)', () =
     expect(getTextResult(result)).toBe('abcde');
     expect(result.warning).toBe('Текст обрезан до 5 символов');
   });
+
+  it('md strategy should return Markdown content as text', async () => {
+    const mdStrategy = (strategies as Record<string, ConfigurableStrategy>).md;
+    const result = await mdStrategy(Buffer.from('# Title\n\nMarkdown body', 'utf8'));
+
+    expect(getTextResult(result)).toBe('# Title\n\nMarkdown body');
+    expect(result.warning).toBeUndefined();
+  });
 });

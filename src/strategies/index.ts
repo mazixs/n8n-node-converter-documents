@@ -134,7 +134,7 @@ function throwProcessingError(format: string, error: unknown): never {
 function officeParserStrategy(format: string): StrategyFn {
   return async (buf) => {
     try {
-      return { text: await extractViaOfficeParser(buf) };
+      return { text: await extractViaOfficeParser(buf, format === 'pdf') };
     } catch (error) {
       throwProcessingError(format, error);
     }
@@ -273,6 +273,14 @@ export const strategies = {
   pdf: officeParserStrategy('pdf'),
 
   txt: async (buf, _ext = undefined, options = undefined) => {
+    return txtStrategy(buf, options?.maxTextChars ?? TXT_STREAM_CHAR_LIMIT);
+  },
+
+  md: async (buf, _ext = undefined, options = undefined) => {
+    return txtStrategy(buf, options?.maxTextChars ?? TXT_STREAM_CHAR_LIMIT);
+  },
+
+  markdown: async (buf, _ext = undefined, options = undefined) => {
     return txtStrategy(buf, options?.maxTextChars ?? TXT_STREAM_CHAR_LIMIT);
   },
 

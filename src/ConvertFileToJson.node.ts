@@ -2,7 +2,7 @@
  * Convert File to JSON
  * ─────────────────────────────────────────────────────────
  * Универсальный кастом-нод для n8n.
- * Поддерживает: DOC, DOCX, XML, YML, XLSX, CSV, PDF, TXT,
+ * Поддерживает: DOC, DOCX, XML, YML, XLSX, CSV, PDF, TXT, MD,
  *               PPT, PPTX, HTML / HTM, ODT, ODP, ODS, JSON.
  * Выход: { text: "..."} либо { sheets: {...} } + metadata.
  */
@@ -60,7 +60,7 @@ export class ConvertFileToJson implements INodeType {
     group: ["transform"],
     version: [5, 6],
     description:
-      "DOCX / XML / YML / XLSX / CSV / PDF / TXT / PPTX / HTML → JSON|text",
+      "DOCX / XML / YML / XLSX / CSV / PDF / TXT / MD / PPTX / HTML → JSON|text",
     subtitle: 'Document → JSON/Text',
     defaults: { name: "Convert File to JSON" },
     inputs: [NodeConnectionTypes.Main],

@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.4.4] - 2026-08-13
+
+### Added
+
+- Added direct Markdown input support for `.md` and `.markdown` files. Markdown is decoded as text and passed through without HTML conversion.
+
+### Fixed
+
+- Fixed PDF processing after an in-place n8n update when an older OfficeParser/PDF.js worker remains in the running Node.js process. The node now resolves the worker from the installed package and temporarily isolates the stale `globalThis.pdfjsWorker` handler while preserving it for older consumers.
+
+### Tests
+
+- Added regressions for Markdown extension routing, worker-path resolution, stale PDF.js global isolation, and preservation of the non-PDF parser path. The exact old-parser-to-new-parser PDF transition was additionally verified on the n8n LXC host with Node.js 24.19.0.
+
 ## [1.4.3] - 2026-08-12
 
 ### Fixed
