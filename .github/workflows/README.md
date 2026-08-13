@@ -10,13 +10,17 @@
 
 ## npm publication
 
-`publish-npm.yml` is the reusable publication workflow. After `auto-release.yml` creates a new GitHub Release, it checks out the matching tag, verifies and tests it on Node.js 24, runs the production audit and npm archive check, and publishes the package.
+`publish-npm.yml` is the reusable publication workflow. After `auto-release.yml` creates a new GitHub Release, it checks out the matching tag, verifies and tests it on Node.js 24, runs the production audit and npm archive check, and publishes the package through npm Trusted Publishing.
 
-The workflow authenticates through the repository secret `NPM_TOKEN`. Configure it in GitHub under **Settings → Secrets and variables → Actions → New repository secret**. Create a Granular Access Token on npm with publish access to `@mazix/n8n-nodes-converter-documents` and enable **Bypass 2FA** for that token. A regular token is accepted by GitHub but npm will stop the publish with `EOTP`.
+The package is configured on npmjs.com under **Trusted Publisher → GitHub Actions**:
 
-The token is passed only as `NODE_AUTH_TOKEN` to the npm publish step. It is not stored in the repository, written to source files, or printed in the workflow summary. The workflow grants only `contents: read`.
+- organization/user: `mazixs`;
+- repository: `n8n-node-converter-documents`;
+- workflow filename: `auto-release.yml`;
+- environment: empty;
+- allowed action: `npm publish`.
 
-Trusted Publishing through npm OIDC is a more secure alternative and does not require `NPM_TOKEN`; it must be configured on the package at npmjs.com and requires `id-token: write` in the publishing workflow. The current workflow uses `NPM_TOKEN` because this repository is configured for token-based publication.
+Both `auto-release.yml` and the called `publish-npm.yml` grant `id-token: write`. npm CLI 11.5.1 or newer is installed in the publishing workflow. No `NPM_TOKEN` is required.
 
 The pull request and push CI remains separate from publication: it runs the Node.js 22.22/24 matrix, audit, lint, build, typecheck, coverage, and archive checks. A push to `main` then follows this order:
 
@@ -25,19 +29,19 @@ push main
 → CI matrix succeeds
 → package version has no matching vX.Y.Z tag
 → auto-release creates tag and GitHub Release
-→ publish-npm verifies the tag and publishes to npm
+→ publish-npm verifies the tag and publishes to npm through OIDC
 ```
 
-For the current release or a retry after a failed publication:
+For the current release or a retry after a failed publication, run the caller workflow with the existing-tag switch:
 
 ```bash
-gh workflow run publish-npm.yml -f version=1.4.5
+gh workflow run auto-release.yml -f publish_existing=true
 gh run watch
 ```
 
 ## Manual npm publication
 
-Use this only when Trusted Publishing is not configured:
+Use this only when GitHub Actions or Trusted Publishing is unavailable:
 
 ```bash
 npm whoami

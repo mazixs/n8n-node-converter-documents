@@ -3,9 +3,17 @@ name: Auto Release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      publish_existing:
+        description: Publish the current package version even when its tag already exists
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   # Run CI checks before release
@@ -20,6 +28,7 @@ jobs:
     needs: ci
     outputs:
       should_release: ${{ steps.check.outputs.should_release }}
+      should_publish: ${{ steps.check.outputs.should_publish }}
       version: ${{ steps.check.outputs.version }}
       tag: ${{ steps.check.outputs.tag }}
     
@@ -34,15 +43,22 @@ jobs:
       run: |
         CURRENT_VERSION=$(node -p "require('./package.json').version")
         TAG="v$CURRENT_VERSION"
+        echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+        echo "tag=$TAG" >> $GITHUB_OUTPUT
         git fetch --tags
         if git rev-parse "$TAG" >/dev/null 2>&1; then
           echo "Tag $TAG already exists, skipping release"
           echo "should_release=false" >> $GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.publish_existing }}" = "true" ]; then
+            echo "Publishing existing tag $TAG"
+            echo "should_publish=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_publish=false" >> $GITHUB_OUTPUT
+          fi
         else
           echo "New version detected: $CURRENT_VERSION"
           echo "should_release=true" >> $GITHUB_OUTPUT
-          echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "should_publish=true" >> $GITHUB_OUTPUT
         fi
         
     - name: Create and Push Tag
@@ -71,19 +87,24 @@ jobs:
         echo "- **Version:** ${{ steps.check.outputs.version }}" >> $GITHUB_STEP_SUMMARY
         echo "- **GitHub:** https://github.com/mazixs/n8n-node-converter-documents/releases/tag/${{ steps.check.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "> npm publication is handled by the Publish to npm job when NPM_TOKEN is configured." >> $GITHUB_STEP_SUMMARY
+        echo "> npm publication is handled by the Publish to npm job through npm Trusted Publishing (OIDC)." >> $GITHUB_STEP_SUMMARY
         
     - name: Skip Summary
       if: steps.check.outputs.should_release != 'true'
       run: |
         echo "## Release Skipped" >> $GITHUB_STEP_SUMMARY
         echo "Tag already exists for current version" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ steps.check.outputs.should_publish }}" = "true" ]; then
+          echo "Existing version was requested for publication" >> $GITHUB_STEP_SUMMARY
+        fi
 
   publish:
     name: Publish package to npm
     needs: release
-    if: needs.release.outputs.should_release == 'true'
+    if: needs.release.outputs.should_publish == 'true'
     uses: ./.github/workflows/publish-npm.yml
+    permissions:
+      contents: read
+      id-token: write
     with:
       version: ${{ needs.release.outputs.version }}
-    secrets: inherit

@@ -6,7 +6,7 @@
 
 - `ci.yml` запускал проверки на Node.js 22.22 и 24 для push в `main`/`develop` и pull request;
 - `auto-release.yml` после успешного CI создавал тег `vX.Y.Z` и GitHub Release, если такой тег ещё не существовал;
-- `publish-npm.yml` запускался вручную и был настроен на Trusted Publishing, но не использовал секрет `NPM_TOKEN`.
+- `publish-npm.yml` был настроен как вызываемый workflow, но публикация ещё использовала секрет `NPM_TOKEN`.
 
 Из-за этого GitHub Release создавался автоматически, а npm-публикация оставалась отдельным ручным действием. Для `1.4.5` это было видно напрямую: CI и Auto Release завершились успешно, тег `v1.4.5` и GitHub Release появились, но npm требовал локальный OTP.
 
@@ -36,21 +36,26 @@ publish-npm
   ├─ checkout тега v<version>
   ├─ проверяет совпадение версии
   ├─ повторяет audit, CI-проверки и проверку архива
-  └─ npm publish --access public через NPM_TOKEN
+  └─ npm publish --access public через Trusted Publishing (OIDC)
 ```
 
-Pull request запускает только CI и не может публиковать пакет. Повторная публикация запускается вручную:
+Pull request запускает только CI и не может публиковать пакет. Повторная публикация существующей версии запускается через вызывающий workflow:
 
 ```bash
-gh workflow run publish-npm.yml -f version=1.4.5
+gh workflow run auto-release.yml -f publish_existing=true
 gh run watch
 ```
 
-## Секрет npm
+## npm Trusted Publishing
 
-В GitHub Actions используется секрет репозитория `NPM_TOKEN`. Для прямого `npm publish` при включённой 2FA это должен быть Granular Access Token с правами публикации именно для `@mazix/n8n-nodes-converter-documents` и включённым **Bypass 2FA**. Обычный токен может пройти настройку GitHub, но npm остановит публикацию с `EOTP`.
+В настройках пакета npm создан Trusted Publisher для GitHub Actions:
 
-Workflow передаёт секрет npm как `NODE_AUTH_TOKEN` только шагу `npm publish`, который понимает `setup-node` и npm CLI. Права GitHub workflow ограничены `contents: read`; токен не хранится в Git и не выводится в summary.
+- organization/user: `mazixs`;
+- repository: `n8n-node-converter-documents`;
+- workflow filename: `auto-release.yml`;
+- allowed action: `npm publish`.
+
+Публикация использует OIDC. `id-token: write` выдан и вызывающему `auto-release.yml`, и вызываемому `publish-npm.yml`; npm CLI обновляется до версии 11.5.1 или новее. `NPM_TOKEN` больше не нужен и после успешной проверки может быть удалён из GitHub Secrets.
 
 ## Проверка для `1.4.5`
 
@@ -61,8 +66,8 @@ Workflow передаёт секрет npm как `NODE_AUTH_TOKEN` только
 - тег `v1.4.5`: создан;
 - GitHub Release `v1.4.5`: создан.
 
-После добавления или обновления `NPM_TOKEN` нужно запустить ручной workflow для публикации уже созданного тега `v1.4.5`. Следующие новые версии будут публиковаться автоматически после прохождения CI и создания GitHub Release.
+После настройки Trusted Publisher нужно запустить `auto-release.yml` с параметром `publish_existing=true` для публикации уже созданного тега `v1.4.5`. Следующие новые версии будут публиковаться автоматически после прохождения CI и создания GitHub Release.
 
-Для `1.4.5` первый запуск дошёл до npm, но получил `EOTP`: существующий секрет оказался обычным токеном без обхода 2FA. После замены значения `NPM_TOKEN` на Granular Access Token с **Bypass 2FA** этот же workflow можно безопасно повторить.
+Для `1.4.5` первый запуск на токене дошёл до npm, но получил `EOTP`. После настройки Trusted Publisher повторный запуск должен использовать OIDC и не требовать OTP или npm-токена.
 
 Порядок проверок в publish workflow намеренно повторяет CI: сначала создаётся `dist`, затем запускаются тесты. Это важно для интеграционного теста in-place update, который загружает собранный пакет из `dist` на чистом runner.
