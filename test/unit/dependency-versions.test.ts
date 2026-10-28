@@ -156,4 +156,27 @@ describe('production dependency versions', () => {
 
     expect(extension).toBe('pdf');
   });
+
+  /*
+   * hucre публикуется только как ESM. Сборка грузит его обычным require(): Node с 22.12
+   * отдаёт ESM без top-level await через require(esm), а hucre такой. В Jest он
+   * транспилируется в CJS (jest.config.js), поэтому настоящую загрузку проверяем здесь,
+   * в отдельном процессе на той версии Node, на которой идёт CI.
+   */
+  it('pins hucre and loads it through require(esm) in plain Node', () => {
+    const projectManifest = readManifest(path.resolve(__dirname, '../../package.json'));
+    const script = [
+      "const { read, readXlsx, readXls, readXlsb } = require('hucre');",
+      "process.stdout.write([read, readXlsx, readXls, readXlsb].map((fn) => typeof fn).join(','));",
+    ].join('\n');
+
+    const loaded = execFileSync(process.execPath, ['-e', script], {
+      cwd: path.resolve(__dirname, '../..'),
+      encoding: 'utf8',
+    });
+
+    expect(projectManifest.dependencies?.['read-excel-file']).toBeUndefined();
+    expect(projectManifest.dependencies?.hucre).toBe('1.3.0');
+    expect(loaded).toBe('function,function,function,function');
+  });
 });

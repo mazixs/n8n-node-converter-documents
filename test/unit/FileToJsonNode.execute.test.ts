@@ -15,6 +15,7 @@ jest.mock('../../src/strategies', () => ({
     txt: jest.fn(),
     pdf: jest.fn(),
     docx: jest.fn(),
+    xlsb: jest.fn(),
   },
 }));
 
@@ -144,6 +145,19 @@ describe('FileToJsonNode.execute', () => {
     });
     expect(mockValidateZipArchive.mock.invocationCallOrder[0])
       .toBeLessThan(mockStrategies.docx.mock.invocationCallOrder[0]);
+  });
+
+  it('checks XLSB ZIP containers before parsing in version 5', async () => {
+    const buffer = Buffer.from('xlsb', 'utf8');
+    const ctx = createContext({ fileName: 'sample.xlsb', buffer });
+    mockValidateZipArchive.mockResolvedValue({ entries: 1, compressedBytes: 1, uncompressedBytes: 1 });
+    mockStrategies.xlsb.mockResolvedValue({ sheets: { Sheet1: [] } });
+
+    await node.execute.call(ctx as unknown as IExecuteFunctions);
+
+    expect(mockValidateZipArchive).toHaveBeenCalledWith(buffer, expect.any(Object));
+    expect(mockValidateZipArchive.mock.invocationCallOrder[0])
+      .toBeLessThan(mockStrategies.xlsb.mock.invocationCallOrder[0]);
   });
 
   it('should auto-detect extension from file-type when extension is unknown', async () => {

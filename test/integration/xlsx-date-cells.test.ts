@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import readXlsxFile from 'read-excel-file/node';
+import { readXlsx } from 'hucre';
 import { strategies } from '../../src/strategies';
 
 // test/samples/dates.xlsx содержит настоящие date-типизированные ячейки:
@@ -9,11 +9,11 @@ import { strategies } from '../../src/strategies';
 const samplePath = path.join(__dirname, '../samples/dates.xlsx');
 
 describe('XLSX date-typed cells', () => {
-  it('read-excel-file returns real Date objects for date-formatted cells', async () => {
-    const workbook = await readXlsxFile(fs.readFileSync(samplePath), { dateFormat: 'YYYY-MM-DD' });
+  it('hucre returns real Date objects for date-formatted cells', async () => {
+    const workbook = await readXlsx(fs.readFileSync(samplePath));
 
-    expect(workbook.map((entry) => entry.sheet)).toEqual(['Dates']);
-    const [, valueRow] = workbook[0].data;
+    expect(workbook.sheets.map((sheet) => sheet.name)).toEqual(['Dates']);
+    const [, valueRow] = workbook.sheets[0].rows;
     expect(valueRow[1]).toBeInstanceOf(Date);
     expect(valueRow[2]).toBeInstanceOf(Date);
     expect(typeof valueRow[3]).toBe('string');

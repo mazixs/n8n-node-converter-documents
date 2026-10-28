@@ -24,6 +24,7 @@ const modernOfficeParserRoot = path.join(packageRoot, 'node_modules', 'officepar
 const v8OfficeParserRoot = path.join(packageRoot, 'node_modules', 'officeparser-v8');
 const topLevelPdfjsRoot = path.join(packageRoot, 'node_modules', 'pdfjs-dist');
 const yauzlRoot = path.join(packageRoot, 'node_modules', 'yauzl');
+const hucreRoot = path.join(packageRoot, 'node_modules', 'hucre');
 
 function writeOfficeParser(root, packageName) {
   fs.mkdirSync(path.join(root, 'dist', 'utils'), { recursive: true });
@@ -162,6 +163,8 @@ async function main() {
     : 'node-html-parser';
   copyPackageShallow(installedPackage(modernHtmlParserSource), modernHtmlParserRoot);
   copyPackageShallow(installedPackage('officeparser-v8'), v8OfficeParserRoot);
+  // hucre is new in this update: dist loads the ESM-only package with require(esm).
+  copyPackageShallow(installedPackage('hucre'), hucreRoot);
   writeOfficeParser(officeParserRoot, 'officeparser');
   writeYauzl(yauzlRoot);
 
@@ -180,12 +183,17 @@ async function main() {
   const pdf = await strategies.pdf(
     fs.readFileSync(path.join(repositoryRoot, 'test', 'samples', 'sample3.pdf')),
   );
+  const xlsx = await strategies.xlsx(
+    fs.readFileSync(path.join(repositoryRoot, 'test', 'samples', 'sheet-cells.xlsx')),
+  );
 
   process.stdout.write(JSON.stringify({
     nodeName: node.description.name,
     detectedExtension: detected?.ext,
     pdfHasText: pdf.text.includes('Get Lost!'),
     staleWorkerRestored: globalThis.pdfjsWorker === staleWorker,
+    xlsxSheets: Object.keys(xlsx.sheets),
+    hucreFromPackage: require.resolve('hucre', { paths: [distRoot] }).startsWith(hucreRoot),
   }));
 }
 

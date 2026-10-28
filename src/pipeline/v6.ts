@@ -207,7 +207,7 @@ export async function executeV6(this: IExecuteFunctions): Promise<INodeExecution
       if (maxFileSize > 0 && buffer.length > maxFileSize) {
         throw new FileTooLargeError(`File is too large (maximum ${maxFileSizeMb} MB)`);
       }
-      if (['docx', 'xlsx', 'pptx', 'odt', 'ods', 'odp'].includes(extension)) {
+      if (['docx', 'xlsx', 'xlsb', 'pptx', 'odt', 'ods', 'odp'].includes(extension)) {
         const maxArchiveEntries = typeof advanced.maxArchiveEntries === 'number'
           ? advanced.maxArchiveEntries : 10_000;
         const maxArchiveUncompressedMb = typeof advanced.maxArchiveUncompressedMb === 'number'

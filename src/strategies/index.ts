@@ -1,6 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import mammoth from "mammoth";
-import readXlsxFile from "read-excel-file/node";
+import { read as readSpreadsheet, type CellValue, type ReadWarning, type Sheet, type Workbook } from "hucre";
 import { parse as parseHtml } from 'node-html-parser-modern';
 import chardet from "chardet";
 import Papa from "papaparse";
@@ -22,6 +22,16 @@ const nodeHtmlMarkdown = new NodeHtmlMarkdown();
 // Константы
 const CSV_ROW_LIMIT = 100000;
 const TXT_CHAR_LIMIT = 1_000_000; // 1 млн символов
+const CFB_SIGNATURE = Buffer.from([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]);
+const MS_PER_DAY = 86_400_000;
+const EXCEL_DAY_ONE = Date.UTC(1900, 0, 1);
+// Предупреждения hucre о потерянных или искажённых ячейках. Гиперссылки, условное
+// форматирование и параметры печати в вывод не попадают, их потеря пользователя не касается.
+const SPREADSHEET_LOSS_WARNINGS = new Set<ReadWarning['code']>([
+  'unresolved-shared-string',
+  'unresolved-style',
+  'malformed-cell-ref',
+]);
 const XML_OPTIONS = {
   ignoreAttributes: false,
   processEntities: {
@@ -104,18 +114,126 @@ async function streamCsvStrategy(data: string, maxRows: number): Promise<Strateg
   });
 }
 
+// --- Таблицы (hucre) ---
+//
+// Правила ячеек повторяют read-excel-file 9.3.10, на котором XLSX читался до перехода на hucre:
+// строки обрезаны по краям, пустые строки и ошибки формул пропущены.
+
+/** Ячейки-ошибки листа: строка → столбцы. hucre помечает их типом только в XLSX. */
+function errorCells(sheet: Sheet): Map<number, Set<number>> {
+  const errors = new Map<number, Set<number>>();
+  for (const [key, cell] of sheet.cells ?? []) {
+    if (cell.type !== 'error' && cell.formulaResultType !== 'error') continue;
+    const [row, column] = key.split(',').map(Number);
+    const columns = errors.get(row) ?? new Set<number>();
+    columns.add(column);
+    errors.set(row, columns);
+  }
+  return errors;
+}
+
+function keepsCell(value: CellValue, isError: boolean): value is Exclude<CellValue, null> {
+  if (value === null || isError) return false;
+  return typeof value !== 'string' || value.trim() !== '';
+}
+
+function cellOutput(value: Exclude<CellValue, null>): string | number | boolean {
+  if (typeof value === 'string') return value.trim();
+  if (value instanceof Date) {
+    // Время без даты (serial < 1) hucre ставит на 1899-12-31, read-excel-file ставил на 1899-12-30.
+    const time = value.getTime();
+    return new Date(time < EXCEL_DAY_ONE ? time - MS_PER_DAY : time).toISOString();
+  }
+  return value;
+}
+
 /**
  * Cheap non-emptiness check for a spreadsheet row: true if at least one cell
- * holds a real value. Used past the row limit to decide whether a row would
+ * would reach the output. Used past the row limit to decide whether a row would
  * actually have contributed data (and is therefore real truncation) without
  * paying the cost of building the full `rowData` object for it.
  */
-function rowHasValue(row: { forEach: (callback: (cell: unknown) => void) => void }): boolean {
-  let hasValue = false;
-  row.forEach((cell) => {
-    if (!hasValue && cell !== null && cell !== undefined) hasValue = true;
+function rowHasValue(row: CellValue[], errorColumns: Set<number> | undefined): boolean {
+  return row.some((cell, colIndex) => keepsCell(cell, errorColumns?.has(colIndex) ?? false));
+}
+
+function rowOutput(row: CellValue[], errorColumns: Set<number> | undefined): Record<string, unknown> {
+  const rowData: Record<string, unknown> = {};
+  row.forEach((cell, colIndex) => {
+    if (keepsCell(cell, errorColumns?.has(colIndex) ?? false)) {
+      rowData[numberToColumn(colIndex + 1)] = cellOutput(cell);
+    }
   });
-  return hasValue;
+  return rowData;
+}
+
+function workbookSheets(workbook: Workbook, maxRows: number): { sheets: Record<string, unknown[]>; truncated: boolean } {
+  const sheets: Record<string, unknown[]> = {};
+  let truncated = false;
+  for (const sheet of workbook.sheets) {
+    // Лист-диаграмма и прочие не-рабочие листы hucre отдаёт пустыми: таблицы в них нет.
+    if (sheet.kind !== undefined && sheet.kind !== 'worksheet') continue;
+    const errors = errorCells(sheet);
+    const jsonData: unknown[] = [];
+    for (const [rowIndex, row] of sheet.rows.entries()) {
+      const errorColumns = errors.get(rowIndex);
+      if (maxRows !== 0 && jsonData.length >= maxRows) {
+        // Limit already reached: only a genuinely non-empty row counts as truncated
+        // data. Check cheaply (no rowData object) and stop as soon as we know either way.
+        if (rowHasValue(row, errorColumns)) {
+          truncated = true;
+          break;
+        }
+        continue;
+      }
+      const rowData = rowOutput(row, errorColumns);
+      if (Object.keys(rowData).length > 0) jsonData.push(rowData);
+    }
+    sheets[sheet.name] = jsonData;
+  }
+  return { sheets, truncated };
+}
+
+function isSpreadsheetContainer(buf: Buffer): boolean {
+  const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4B; // "PK"
+  return isZip || buf.subarray(0, CFB_SIGNATURE.length).equals(CFB_SIGNATURE);
+}
+
+/**
+ * XLSX, XLSB и XLS читает один и тот же разбор: hucre различает их по содержимому,
+ * поэтому книга с чужим расширением тоже читается. Формат из имени нужен только для
+ * текста ошибок и предупреждений.
+ */
+function spreadsheetStrategy(format: string): StrategyFn {
+  return async (buf, _ext = undefined, options = undefined) => {
+    const lost = new Map<string, { message: string; count: number }>();
+    let workbook: Workbook;
+    try {
+      // Иначе hucre прочитал бы любой текст как CSV.
+      if (!isSpreadsheetContainer(buf)) throw new Error('the file is not an XLSX, XLSB or XLS workbook');
+      workbook = await readSpreadsheet(buf, {
+        onWarning: (warning) => {
+          if (!SPREADSHEET_LOSS_WARNINGS.has(warning.code)) return;
+          const seen = lost.get(warning.code);
+          if (seen) seen.count += 1;
+          else lost.set(warning.code, { message: warning.message, count: 1 });
+        },
+      });
+    } catch (error) {
+      throwProcessingError(format, error);
+    }
+
+    const maxRows = options?.maxRows ?? CSV_ROW_LIMIT;
+    const { sheets, truncated } = workbookSheets(workbook, maxRows);
+    const warnings = truncated ? [`${format.toUpperCase()} sheets truncated to ${maxRows} row(s)`] : [];
+    for (const [code, { message, count }] of lost) {
+      warnings.push(`${code}: ${message}${count > 1 ? ` (+${count - 1} more)` : ''}`);
+    }
+    return {
+      sheets,
+      warning: warnings.length > 0 ? warnings.join('; ') : undefined,
+    };
+  };
 }
 
 async function processHtml(buf: Buffer): Promise<StrategyResult> {
@@ -141,9 +259,8 @@ function cfbLegacyStrategy(format: string, modernFormat: string): StrategyFn {
   return async (buf) => {
     try {
       const signature = buf.slice(0, 8);
-      const cfbSignature = Buffer.from([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]);
-      
-      if (signature.equals(cfbSignature)) throw legacyFormatError(format, modernFormat);
+
+      if (signature.equals(CFB_SIGNATURE)) throw legacyFormatError(format, modernFormat);
       
       return officeTextResult(await extractViaOfficeParser(buf));
     } catch (error) {
@@ -282,39 +399,9 @@ export const strategies = {
   odp: officeParserStrategy('odp'),
   ods: officeParserStrategy('ods'),
 
-  xlsx: async (buf, _ext = undefined, options = undefined) => {
-    const workbook = await readXlsxFile(buf, { dateFormat: 'YYYY-MM-DD' });
-    const sheets: Record<string, unknown[]> = {};
-    const maxRows = options?.maxRows ?? CSV_ROW_LIMIT;
-    let truncated = false;
-    for (const { sheet: sheetName, data: rows } of workbook) {
-      const jsonData: unknown[] = [];
-      for (const row of rows) {
-        if (maxRows !== 0 && jsonData.length >= maxRows) {
-          // Limit already reached: only a genuinely non-empty row counts as truncated
-          // data. Check cheaply (no rowData object) and stop as soon as we know either way.
-          if (rowHasValue(row)) {
-            truncated = true;
-            break;
-          }
-          continue;
-        }
-        const rowData: Record<string, unknown> = {};
-        row.forEach((cell: unknown, colIndex: number) => {
-          if (cell !== null && cell !== undefined) {
-            const columnLetter = numberToColumn(colIndex + 1);
-            rowData[columnLetter] = cell instanceof Date ? cell.toISOString() : cell;
-          }
-        });
-        if (Object.keys(rowData).length > 0) jsonData.push(rowData);
-      }
-      sheets[sheetName] = jsonData;
-    }
-    return {
-      sheets,
-      warning: truncated ? `XLSX sheets truncated to ${maxRows} row(s)` : undefined,
-    };
-  },
+  xlsx: spreadsheetStrategy('xlsx'),
+  xlsb: spreadsheetStrategy('xlsb'),
+  xls: spreadsheetStrategy('xls'),
 
   csv: async (buf, _ext = undefined, options = undefined) => {
     return streamCsvStrategy(decodeBuffer(buf), options?.maxRows ?? CSV_ROW_LIMIT);

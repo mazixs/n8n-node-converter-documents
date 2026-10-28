@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 describe('in-place n8n community package update', () => {
-  it('loads and parses PDFs after replacing dependencies left by 1.2.2-1.5.0', () => {
+  it('loads and parses PDFs and spreadsheets after replacing dependencies left by 1.2.2-1.5.0', () => {
     const repositoryRoot = path.resolve(__dirname, '../..');
     const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'converter-update-test-'));
     let output: string;
@@ -35,6 +35,8 @@ describe('in-place n8n community package update', () => {
       detectedExtension: 'png',
       pdfHasText: true,
       staleWorkerRestored: true,
+      xlsxSheets: ['Cells', 'Second', 'Hidden'],
+      hucreFromPackage: true,
     });
   });
 });

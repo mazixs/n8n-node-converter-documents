@@ -4,11 +4,13 @@
 
 ### Added
 
+- Legacy binary `.xls` (Excel 97–2003) and `.xlsb` (Excel binary) workbooks are now read into `document.sheets` alongside XLSX, with the same row-object shape. Format is detected by content, so a workbook with the wrong extension still opens.
 - RTF documents are read as text.
 - PDF, DOCX, PPTX and OpenDocument results now carry a warning when the parser left content out or could not read it faithfully, for example `PDF_CONTENT_LIMIT_EXCEEDED` when a PDF runs out of its time or text budget, or `PDF_TEXT_ENCODING_SUSPECT` when its fonts map glyphs to nothing readable. A warning is added only when there is one, so the version 5 output of an ordinary file is unchanged.
 
 ### Changed
 
+- Spreadsheet reading moved from `read-excel-file` to `hucre`, which also reads XLSB and XLS. The row-object shape is unchanged: keys are column letters, text is trimmed, blank cells are dropped, dates and times are ISO 8601 UTC, and a time without a date lands on 1899-12-30. Error cells are dropped in XLSX, as before; XLSB and XLS return them as text.
 - Document parsing moved from `officeparser` 6.0.7 to 8.4.0, installed under the new alias `officeparser-v8`. Plain text is rendered without layout padding, as before.
 - PDF.js now runs in a separate process with its own memory ceiling and CPU-time budget, so a hostile PDF can no longer exhaust the memory of the n8n process. Workers, character maps and image decoders are never fetched from a CDN.
 - `pdfjs-dist` is no longer a direct dependency. It comes with `officeparser` and lands in `officeparser-v8/node_modules`, a path no earlier version used, so an in-place update from the n8n UI does not pick up the PDF.js 5.5.207 module that 1.5.0 left in the ESM cache.
@@ -23,6 +25,7 @@
 
 - The in-place update test now loads the node over the PDF.js API and worker that 1.5.0 leaves in a running process and parses a real PDF through them.
 - Added real-file tests for RTF and checks that the PDF worker comes from the parser's own PDF.js copy.
+- Added XLSX, XLSB and XLS sample workbooks covering trimming, dates, times, errors, blank rows and non-ASCII text, with integration tests asserting the row-object output and a unit test pinning `hucre` and its `require(esm)` load path.
 
 ## [1.5.0] - 2026-08-13
 
@@ -41,6 +44,7 @@
 - File names containing a literal `..` inside the name, such as `report..v2.pdf`, were rejected as path traversal. Traversal is now detected by path segments and separators instead of a substring match.
 - Yandex Market YML entries without a text node produced the literal string `[object Object]` for a parameter value or category name; they now produce `null`.
 - XLSX row scanning stops once the per-sheet row limit is reached instead of walking every remaining row, and the truncation warning is raised only when data is actually dropped.
+- Time-of-day cells rounded to the wrong second and dates before 1 March 1900 were shifted a day; both are now returned correctly.
 - Encoding detection now samples the first 64 KB instead of analysing the whole buffer, which was expensive for large text files.
 - The `maxOutputChars` check for structured output no longer serializes the entire result just to measure its length.
 
