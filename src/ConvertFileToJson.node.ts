@@ -3,7 +3,7 @@
  * ─────────────────────────────────────────────────────────
  * Универсальный кастом-нод для n8n.
  * Поддерживает: DOC, DOCX, XML, YML, XLSX, CSV, PDF, TXT, MD,
- *               PPT, PPTX, HTML / HTM, ODT, ODP, ODS, JSON.
+ *               PPT, PPTX, HTML / HTM, ODT, ODP, ODS, RTF, JSON.
  * Выход: { text: "..."} либо { sheets: {...} } + metadata.
  */
 
@@ -44,7 +44,7 @@ export class ConvertFileToJson implements INodeType {
     group: ["transform"],
     version: [5, 6],
     description:
-      "Extracts text, HTML, or Markdown from documents (DOCX, PDF, PPTX, ODT, HTML, TXT, MD) and reads table rows from spreadsheets (XLSX, CSV), " +
+      "Extracts text, HTML, or Markdown from documents (DOCX, PDF, PPTX, ODT, RTF, HTML, TXT, MD) and reads table rows from spreadsheets (XLSX, CSV), " +
       "also parsing JSON, XML, and Yandex Market YML into structured data",
     // Output Format only affects DOCX parsing, so only advertise it on the canvas
     // when the user picked a non-default value (html/markdown); for every other

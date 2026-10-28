@@ -32,7 +32,7 @@ npm install @mazix/n8n-nodes-converter-documents
 
 Restart n8n after a command-line installation.
 
-OCR libraries ship as optional dependencies and are installed once with the package; choosing OCR in a workflow only activates them. To skip them and keep the installation smaller:
+OCR libraries ship as optional dependencies. A command-line installation includes them, and choosing OCR in a workflow only activates them. The **Community Nodes** screen leaves optional dependencies out, so a package installed there answers OCR with `OCR_UNAVAILABLE` until it is installed from the command line. To skip them on the command line and keep the installation smaller:
 
 ```bash
 npm install --omit=optional @mazix/n8n-nodes-converter-documents
@@ -62,7 +62,7 @@ For a document set feeding an LLM, switch **Output Format** to `Markdown`; table
 
 | Group | Formats | What you get |
 | --- | --- | --- |
-| Documents | DOCX, PDF, TXT, MD, Markdown | `document.text`; DOCX additionally offers HTML and Markdown |
+| Documents | DOCX, PDF, RTF, TXT, MD, Markdown | `document.text`; DOCX additionally offers HTML and Markdown |
 | Spreadsheets | XLSX, CSV | `document.sheets` — named sheets of row objects; XLSX keys are column letters, CSV keys come from the header row |
 | OpenDocument | ODT, ODS, ODP | `document.text` — ODS included, it is extracted as text rather than rows |
 | Presentations | PPTX | `document.text` |
@@ -172,6 +172,8 @@ Version 6 keeps limits under **Advanced Options**. Where noted, `0` disables the
 | Max Archive Uncompressed Size (MB) | 200 | Expanded container size; `0` for unlimited |
 | Max Compression Ratio | 100 | Expanded-to-compressed ratio, per entry and per archive; `0` for unlimited |
 
+PDF text is read by PDF.js in a separate process with its own memory ceiling (1 GB) and a CPU-time budget of 5 seconds plus 20 ms per KB of the file, so a hostile PDF cannot exhaust n8n's memory or stall it. A document that runs out of that budget is returned as far as it was read, with `PDF_CONTENT_LIMIT_EXCEEDED` in `warnings`. These budgets are not configurable yet.
+
 Two more choices sit outside that collection. **Output Format** applies to DOCX and selects plain text, HTML or Markdown. **JSON Output Mode** defaults to `Preserve Structure`; `Flatten` rewrites nested keys as dotted paths.
 
 ## OCR for scanned PDFs
@@ -206,7 +208,7 @@ Parsing untrusted documents is resource-sensitive by nature.
 
 Keep the size and archive limits on — they exist to stop compression bombs and pathological containers. Restrict community-node installation and OCR model configuration to trusted administrators, since **Language Data Path** accepts remote locations. Avoid retaining source binaries unless a downstream node genuinely needs them.
 
-PDF.js is pinned to an exact version that sits outside the affected range of [GHSA-hq66-cqwq-w95j](https://github.com/advisories/GHSA-hq66-cqwq-w95j), and a dependency test fails the build if any copy in the tree drifts into it. `npm audit --omit=dev --audit-level=high` runs in CI and before every publish.
+PDF.js arrives at an exact version through the pinned `officeparser`, outside the affected range of [GHSA-hq66-cqwq-w95j](https://github.com/advisories/GHSA-hq66-cqwq-w95j), and a dependency test fails the build if any copy in the tree drifts into it. It runs in a separate process, never fetches workers, character maps or decoders from a CDN, and reads only the files that ship with it. `npm audit --omit=dev --audit-level=high` runs in CI and before every publish.
 
 Report vulnerabilities privately through the repository's GitHub security advisory feature.
 
@@ -214,10 +216,12 @@ Report vulnerabilities privately through the repository's GitHub security adviso
 
 | Symptom | What to do |
 | --- | --- |
-| `OCR_UNAVAILABLE` | Reinstall without `--omit=optional`, then restart n8n |
+| `OCR_UNAVAILABLE` | Install from the command line without `--omit=optional`, then restart n8n |
 | `OCR_TIMEOUT` | Lower **Render Scale** or **Max Pages**, or raise **Page Timeout** |
 | Missing language model | Check the language code and the model directory or HTTPS location |
 | Empty PDF text | Set **OCR Mode** to `When No Text Found` — the PDF is probably a scan |
+| `PDF_CONTENT_LIMIT_EXCEEDED` in `warnings` | The PDF ran out of the parser's time or text budget and its text is partial |
+| `PDF_TEXT_ENCODING_SUSPECT` in `warnings` | The PDF's fonts map glyphs to nothing readable; OCR with **Always** may give better text |
 | `ARCHIVE_LIMIT_EXCEEDED` | Inspect the document before raising ZIP limits; this is what a bomb looks like |
 | `OUTPUT_LIMIT_EXCEEDED` | Raise **Max Output Characters** or split the input into smaller batches |
 | Legacy DOC or PPT rejected | Re-save as DOCX or PPTX; the binary formats are not parsed |

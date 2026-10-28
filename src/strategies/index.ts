@@ -6,7 +6,7 @@ import chardet from "chardet";
 import Papa from "papaparse";
 import { NodeHtmlMarkdown } from "node-html-markdown";
 
-import { extractViaOfficeParser } from "../helpers";
+import { extractViaOfficeParser, type OfficeExtraction } from "../helpers";
 import {
   UnsupportedFormatError,
   ProcessingError,
@@ -129,6 +129,11 @@ async function processHtml(buf: Buffer): Promise<StrategyResult> {
   }
 }
 
+// `warning` только при наличии: v5 разворачивает результат стратегии в свой вывод как есть.
+function officeTextResult({ text, warnings }: OfficeExtraction): StrategyResult {
+  return warnings.length > 0 ? { text, warning: warnings.join('; ') } : { text };
+}
+
 /**
  * Общая стратегия для legacy CFB форматов (DOC, PPT)
  */
@@ -140,7 +145,7 @@ function cfbLegacyStrategy(format: string, modernFormat: string): StrategyFn {
       
       if (signature.equals(cfbSignature)) throw legacyFormatError(format, modernFormat);
       
-      return { text: await extractViaOfficeParser(buf) };
+      return officeTextResult(await extractViaOfficeParser(buf));
     } catch (error) {
       if (error instanceof UnsupportedFormatError) {
         throw error;
@@ -172,7 +177,7 @@ function throwProcessingError(format: string, error: unknown): never {
 function officeParserStrategy(format: string): StrategyFn {
   return async (buf) => {
     try {
-      return { text: await extractViaOfficeParser(buf, format === 'pdf') };
+      return officeTextResult(await extractViaOfficeParser(buf, format === 'pdf'));
     } catch (error) {
       throwProcessingError(format, error);
     }
@@ -203,9 +208,9 @@ export const strategies = {
     
     // Попытка 1: officeparser
     try {
-      const text = await extractViaOfficeParser(buf);
-      if (text && text.trim().length > 0) {
-        return { text };
+      const extraction = await extractViaOfficeParser(buf);
+      if (extraction.text.trim().length > 0) {
+        return officeTextResult(extraction);
       }
     } catch {
       // Ошибка officeparser - пробуем дальше
@@ -324,6 +329,7 @@ export const strategies = {
   ppt: cfbLegacyStrategy('ppt', 'pptx'),
 
   pptx: officeParserStrategy('pptx'),
+  rtf: officeParserStrategy('rtf'),
 
   html: processHtml,
   htm: processHtml,

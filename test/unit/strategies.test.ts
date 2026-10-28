@@ -170,12 +170,39 @@ describe('File Processing Strategies (real src/strategies implementation)', () =
   });
 
   it('pdf strategy should return text from extractViaOfficeParser', async () => {
-    mockExtractViaOfficeParser.mockResolvedValue('Extracted PDF content');
+    mockExtractViaOfficeParser.mockResolvedValue({ text: 'Extracted PDF content', warnings: [] });
 
     const result = await strategies.pdf(Buffer.from('mock-pdf', 'utf8'));
 
     expect(getTextResult(result)).toBe('Extracted PDF content');
+    // No parser warnings, no `warning` key: v5 spreads the result into its output as is.
+    expect('warning' in result).toBe(false);
     expect(mockExtractViaOfficeParser).toHaveBeenCalledTimes(1);
+  });
+
+  it('pdf strategy passes on what the parser left out as the warning', async () => {
+    mockExtractViaOfficeParser.mockResolvedValue({
+      text: 'Partial PDF content',
+      warnings: ['PDF_CONTENT_LIMIT_EXCEEDED: limit reached', 'PDF_TEXT_ENCODING_SUSPECT: garbled'],
+    });
+
+    const result = await strategies.pdf(Buffer.from('mock-pdf', 'utf8'));
+
+    expect(getTextResult(result)).toBe('Partial PDF content');
+    expect(result.warning).toBe(
+      'PDF_CONTENT_LIMIT_EXCEEDED: limit reached; PDF_TEXT_ENCODING_SUSPECT: garbled',
+    );
+  });
+
+  it('rtf strategy should return text from extractViaOfficeParser', async () => {
+    mockExtractViaOfficeParser.mockResolvedValue({ text: 'Extracted RTF content', warnings: [] });
+    const rtfStrategy = (strategies as Record<string, ConfigurableStrategy>).rtf;
+
+    expect(rtfStrategy).toBeDefined();
+    const result = await rtfStrategy(Buffer.from('{\\rtf1 mock}', 'utf8'));
+
+    expect(getTextResult(result)).toBe('Extracted RTF content');
+    expect(mockExtractViaOfficeParser).toHaveBeenCalledWith(expect.any(Buffer), false);
   });
 
   it('pdf strategy should wrap parser failures into ProcessingError', async () => {

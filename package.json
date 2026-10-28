@@ -1,7 +1,7 @@
 {
   "name": "@mazix/n8n-nodes-converter-documents",
   "version": "1.5.0",
-  "description": "n8n community node that extracts text, HTML or Markdown from documents (DOCX, PDF, ODT, ODS, ODP, TXT, MD, PPTX, HTML), named sheets with row objects from spreadsheets (XLSX, CSV), and structured data from JSON, XML and Yandex Market YML, with optional local OCR for scanned PDFs",
+  "description": "n8n community node that extracts text, HTML or Markdown from documents (DOCX, PDF, ODT, ODS, ODP, RTF, TXT, MD, PPTX, HTML), named sheets with row objects from spreadsheets (XLSX, CSV), and structured data from JSON, XML and Yandex Market YML, with optional local OCR for scanned PDFs",
   "main": "dist/ConvertFileToJson.node.js",
   "files": [
     "dist/**/*.js",
@@ -64,9 +64,8 @@
     "mammoth": "^1.12.1",
     "node-html-markdown": "^2.0.0",
     "node-html-parser-modern": "npm:node-html-parser@9.0.0",
-    "officeparser-modern": "npm:officeparser@6.0.7",
+    "officeparser-v8": "npm:officeparser@8.4.0",
     "papaparse": "^5.6.0",
-    "pdfjs-dist": "5.5.207",
     "read-excel-file": "9.3.10",
     "yauzl": "^3.4.0"
   },
