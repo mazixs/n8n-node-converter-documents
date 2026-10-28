@@ -17,6 +17,7 @@
 ### Security
 
 - Every PDF.js copy in the tree is now outside GHSA-hq66-cqwq-w95j: `officeparser` 8.4.0 pins 6.2.108, the first fixed version, and the only other copy is 5.4.624 from the optional `pdf-to-img`.
+- `@xmldom/xmldom` under `mammoth` updated from 0.8.13 to 0.8.15, which fixes the high-severity advisories against `<=0.8.14` (GHSA-6gmq-8vp8-gcm6 and related) that failed the `npm audit` gate.
 
 ### Tests
 
