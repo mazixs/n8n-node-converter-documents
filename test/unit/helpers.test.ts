@@ -1,13 +1,21 @@
-import { extractViaOfficeParser, refreshPdfJsWorkerCache } from '../../src/helpers';
+import { extractViaOfficeParser } from '../../src/helpers';
 import fs from 'fs';
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
 
-// Mock officeparser module (v6 API: parseOffice returns AST with toText())
-jest.mock('officeparser-modern', () => ({
+// Mock officeparser module (v8 API: parseOffice returns an AST rendered by `to()`)
+jest.mock('officeparser-v8', () => ({
   parseOffice: jest.fn()
 }));
 
-import { parseOffice } from 'officeparser-modern';
+import { parseOffice } from 'officeparser-v8';
 const mockParseOffice = parseOffice as jest.MockedFunction<typeof parseOffice>;
+
+type Issue = { type: 'warning'; code: string; message: string };
+
+function astWithText(text: string, warnings: Issue[] = []): { to: jest.Mock; warnings: Issue[] } {
+  return { to: jest.fn().mockResolvedValue({ value: text }), warnings };
+}
 
 describe('helpers', () => {
   beforeEach(() => {
@@ -15,41 +23,40 @@ describe('helpers', () => {
   });
 
   describe('extractViaOfficeParser', () => {
-    it('replaces the cached fake worker with the current PDF.js worker', async () => {
-      const staleWorker = { version: '5.4.530' };
-      const currentWorker = { WorkerMessageHandler: { version: '5.5.207' } };
-      const pdfjs = {
-        PDFWorker: {
-          _setupFakeWorkerGlobal: Promise.resolve(staleWorker),
-        },
-      };
-
-      refreshPdfJsWorkerCache(pdfjs, currentWorker);
-
-      await expect(pdfjs.PDFWorker._setupFakeWorkerGlobal)
-        .resolves.toBe(currentWorker.WorkerMessageHandler);
-    });
-
-    it('should extract text successfully', async () => {
-      const expectedText = 'extracted text from office file';
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      mockParseOffice.mockResolvedValue({ toText: () => expectedText } as any);
+    it('parses PDFs with the worker of officeparser\'s own pdf.js copy and no CDN', async () => {
+      const ast = astWithText('extracted text from office file');
+      mockParseOffice.mockResolvedValue(ast as never);
 
       const buffer = Buffer.from('mock office file content');
       const result = await extractViaOfficeParser(buffer, true);
 
-      expect(result).toBe(expectedText);
-      expect(mockParseOffice).toHaveBeenCalledWith(buffer, { pdfWorkerSrc: expect.any(String) });
-      const config = mockParseOffice.mock.calls[0][1] as { pdfWorkerSrc?: string };
-      expect(config.pdfWorkerSrc).toContain('pdfjs-dist/legacy/build/pdf.worker.mjs');
-      expect(fs.existsSync(config.pdfWorkerSrc as string)).toBe(true);
+      expect(result).toEqual({ text: 'extracted text from office file', warnings: [] });
+      const config = mockParseOffice.mock.calls[0][1] as { pdfWorkerSrc?: string; allowRemoteAssets?: boolean };
+      expect(config.allowRemoteAssets).toBe(false);
+      // A file: URL is what lets officeparser run pdf.js in its separate process.
+      expect(config.pdfWorkerSrc).toMatch(/^file:\/\//);
+      const workerPath = fileURLToPath(config.pdfWorkerSrc as string);
+      expect(fs.existsSync(workerPath)).toBe(true);
+      expect(workerPath).toBe(
+        createRequire(require.resolve('officeparser-v8')).resolve('pdfjs-dist/legacy/build/pdf.worker.mjs'),
+      );
     });
 
-    it('should keep the existing parser call for non-PDF formats', async () => {
-      mockParseOffice.mockResolvedValue({ toText: () => 'office text' } as never);
+    it('renders plain text without the spatial layout padding', async () => {
+      const ast = astWithText('office text');
+      mockParseOffice.mockResolvedValue(ast as never);
 
-      await expect(extractViaOfficeParser(Buffer.from('docx'))).resolves.toBe('office text');
-      expect(mockParseOffice).toHaveBeenCalledWith(Buffer.from('docx'));
+      await expect(extractViaOfficeParser(Buffer.from('docx')))
+        .resolves.toEqual({ text: 'office text', warnings: [] });
+      expect(ast.to).toHaveBeenCalledWith('text', { textConfig: { preserveLayout: false } });
+    });
+
+    it('should keep remote assets disabled for non-PDF formats without a worker override', async () => {
+      mockParseOffice.mockResolvedValue(astWithText('office text') as never);
+
+      await extractViaOfficeParser(Buffer.from('docx'));
+
+      expect(mockParseOffice).toHaveBeenCalledWith(Buffer.from('docx'), { allowRemoteAssets: false });
     });
 
     it('should reject on officeparser error', async () => {
@@ -57,7 +64,7 @@ describe('helpers', () => {
       mockParseOffice.mockRejectedValue(mockError);
 
       const buffer = Buffer.from('invalid office file content');
-      
+
       await expect(extractViaOfficeParser(buffer, true))
         .rejects.toThrow('OfficeParser extraction failed');
     });
@@ -68,12 +75,31 @@ describe('helpers', () => {
       workerGlobal.pdfjsWorker = staleWorker;
       mockParseOffice.mockImplementation(async () => {
         expect(workerGlobal.pdfjsWorker).toBeUndefined();
-        return { toText: () => 'isolated text' } as never;
+        return astWithText('isolated text') as never;
       });
 
-      await expect(extractViaOfficeParser(Buffer.from('pdf'), true)).resolves.toBe('isolated text');
+      await expect(extractViaOfficeParser(Buffer.from('pdf'), true))
+        .resolves.toEqual({ text: 'isolated text', warnings: [] });
       expect(workerGlobal.pdfjsWorker).toBe(staleWorker);
       delete workerGlobal.pdfjsWorker;
+    });
+
+    it('reports content the parser left out or could not read faithfully', async () => {
+      const limit = 'PDF content limit reached on page 3: the rest of the document was not read.';
+      mockParseOffice.mockResolvedValue(astWithText('partial text', [
+        { type: 'warning', code: 'PDF_CONTENT_LIMIT_EXCEEDED', message: limit },
+        { type: 'warning', code: 'PDF_STRUCT_TREE_UNRELIABLE', message: 'Structure recovered from geometry.' },
+        { type: 'warning', code: 'PDF_CONTENT_LIMIT_EXCEEDED', message: limit },
+        { type: 'warning', code: 'PDF_TEXT_ENCODING_SUSPECT', message: 'Many unmappable glyphs.' },
+      ]) as never);
+
+      await expect(extractViaOfficeParser(Buffer.from('pdf'), true)).resolves.toEqual({
+        text: 'partial text',
+        warnings: [
+          `PDF_CONTENT_LIMIT_EXCEEDED: ${limit}`,
+          'PDF_TEXT_ENCODING_SUSPECT: Many unmappable glyphs.',
+        ],
+      });
     });
   });
 });

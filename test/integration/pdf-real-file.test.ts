@@ -7,9 +7,10 @@ describe('PDF extraction with the production parser', () => {
     const pdfPath = path.resolve(__dirname, '../samples/sample3.pdf');
     const script = [
       "const fs = require('fs');",
-      "const { parseOffice } = require('officeparser-modern');",
-      "parseOffice(fs.readFileSync(process.argv[1]))",
-      "  .then((ast) => process.stdout.write(ast.toText()))",
+      "const { parseOffice } = require('officeparser-v8');",
+      "parseOffice(fs.readFileSync(process.argv[1]), { allowRemoteAssets: false })",
+      "  .then((ast) => ast.to('text', { textConfig: { preserveLayout: false } }))",
+      "  .then((result) => process.stdout.write(result.value))",
       "  .catch((error) => { console.error(error); process.exit(1); });",
     ].join('\n');
 
@@ -18,6 +19,7 @@ describe('PDF extraction with the production parser', () => {
       encoding: 'utf8',
     });
 
-    expect(text.trim().length).toBeGreaterThan(0);
+    expect(text).toContain('Get Lost!');
+    expect(text).toContain('A Document which shows how eaDocX');
   });
 });

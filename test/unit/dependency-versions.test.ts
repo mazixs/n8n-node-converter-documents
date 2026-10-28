@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { createRequire } from 'module';
 import { execFileSync } from 'child_process';
 
 type PackageManifest = {
@@ -54,32 +55,52 @@ function findInstalledCopies(nodeModulesPath: string, packageName: string): stri
 }
 
 describe('production dependency versions', () => {
-  it('pins officeparser to the installed compatible version under a fresh package name', () => {
+  it('pins officeparser 8 under a fresh package name', () => {
     const projectManifest = readManifest(path.resolve(__dirname, '../../package.json'));
     const officeParserManifest = readManifest(
-      path.resolve(path.dirname(require.resolve('officeparser-modern')), '../package.json'),
+      path.resolve(path.dirname(require.resolve('officeparser-v8')), '../package.json'),
     );
-    const declaredVersion = projectManifest.dependencies?.['officeparser-modern'];
 
-    expect(declaredVersion).toBe('npm:officeparser@6.0.7');
-    expect(officeParserManifest.version).toBe('6.0.7');
+    // Старое имя держит в кэше работающего n8n путь к officeparser 6.0.7 (см. docs/).
+    // Версия officeparser с другой pdfjs-dist требует нового имени алиаса:
+    // docs/2026-10-28-officeparser-8.md.
+    expect(projectManifest.dependencies?.['officeparser-modern']).toBeUndefined();
+    expect(projectManifest.dependencies?.['officeparser-v8']).toBe('npm:officeparser@8.4.0');
+    expect(officeParserManifest.version).toBe('8.4.0');
+  });
+
+  /*
+   * pdfjs-dist намеренно не объявлен прямой зависимостью.
+   *
+   * До 1.5.0 включительно он лежал в корне пакета (node_modules/pdfjs-dist, 5.5.207) и
+   * грузился в процесс n8n как ESM. Кэш ESM-модулей Node не сбрасывается до перезапуска,
+   * поэтому новая версия по тому же пути после обновления на лету получила бы старый
+   * API 5.5.207 рядом с новым worker'ом — ошибка «API version does not match the Worker
+   * version», уже знакомая по 1.4.3-1.4.5. n8n ставит зависимости с
+   * --install-strategy=shallow: прямые — в корень, их собственные — внутрь. Без прямого
+   * объявления pdfjs-dist ложится в officeparser-v8/node_modules — новый путь и свежий
+   * модуль.
+   */
+  it('leaves pdfjs-dist to officeparser so n8n nests it under a fresh path', () => {
+    const projectManifest = readManifest(path.resolve(__dirname, '../../package.json'));
+    const pdfjsManifestPath = createRequire(require.resolve('officeparser-v8'))
+      .resolve('pdfjs-dist/package.json');
+
+    expect(projectManifest.dependencies?.['pdfjs-dist']).toBeUndefined();
+    expect(readManifest(pdfjsManifestPath).version).toBe('6.2.108');
   });
 
   /*
    * Состав копий pdfjs-dist зафиксирован осознанно, а не является случайным следствием
    * резолвинга npm.
    *
-   * Идеальное состояние — одна копия: именно вложенная вторая копия ломала PDF-воркер
-   * в 1.4.3-1.4.5, и хак в src/helpers.ts существует ровно из-за неё. Дедуплицировать её
-   * сегодня можно только поднявшись на pdfjs-dist 5.6.205 (pdf-to-img 6.x требует
-   * ~5.6.205), но весь диапазон >=5.6.83 <6.2.108 закрыт advisory GHSA-hq66-cqwq-w95j:
-   * исполнение произвольного JavaScript при открытии недоверенного PDF. В ветке 5.x
-   * исправления нет вовсе, а officeparser 7.5.1 жёстко пинит 6.1.200 — тоже уязвимую.
-   * Безопасной комбинации с одной копией на сегодня не существует, поэтому две копии
-   * вне уязвимого диапазона выбраны как меньшее зло.
+   * Весь диапазон >=5.6.83 <6.2.108 закрыт advisory GHSA-hq66-cqwq-w95j: исполнение
+   * произвольного JavaScript при открытии недоверенного PDF. officeparser 8.4.0 пинит
+   * 6.2.108 — первую исправленную версию, поэтому разбор PDF вышел из диапазона.
    *
-   * Условие выхода: релиз pdf-to-img или officeparser с pdfjs-dist 6.2.108+. Тогда
-   * обновляемся, снова получаем дедупликацию и ужесточаем тест до одной копии.
+   * Вторая копия, 5.4.624, принадлежит pdf-to-img и нужна только опциональному OCR.
+   * Условие выхода: OCR перестаёт зависеть от pdf-to-img. Тогда ужесточаем тест до одной
+   * копии.
    */
   const VULNERABLE_RANGE = { fromInclusive: '5.6.83', untilExclusive: '6.2.108' };
 
@@ -94,26 +115,13 @@ describe('production dependency versions', () => {
 
   it('keeps the pdfjs-dist copies at the deliberately pinned composition', () => {
     const projectRoot = path.resolve(__dirname, '../..');
-    const projectManifest = readManifest(path.join(projectRoot, 'package.json'));
-    const declaredVersion = projectManifest.dependencies?.['pdfjs-dist'];
-
-    expect(declaredVersion).toMatch(/^\d+\.\d+\.\d+$/);
-
     const copies = findInstalledCopies(path.join(projectRoot, 'node_modules'), 'pdfjs-dist');
-    const versionsByPath = copies.map((manifestPath) => ({
-      path: path.relative(projectRoot, manifestPath),
-      version: readManifest(manifestPath).version as string,
-    }));
+    const versions = copies
+      .map((manifestPath) => readManifest(manifestPath).version as string)
+      .sort(compareVersions);
 
-    // Копия в корне — та, которую грузят src/helpers.ts и officeparser-modern.
-    expect(versionsByPath).toContainEqual({
-      path: path.join('node_modules', 'pdfjs-dist', 'package.json'),
-      version: declaredVersion,
-    });
-
-    // Вторая копия принадлежит pdf-to-img и существует только из-за advisory (см. выше).
-    const versions = versionsByPath.map((copy) => copy.version).sort(compareVersions);
-    expect(versions).toEqual(['5.4.624', '5.5.207']);
+    // 6.2.108 — копия officeparser-v8, 5.4.624 — копия pdf-to-img для OCR (см. выше).
+    expect(versions).toEqual(['5.4.624', '6.2.108']);
   });
 
   it('keeps every pdfjs-dist copy out of the GHSA-hq66-cqwq-w95j range', () => {

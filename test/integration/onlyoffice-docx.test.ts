@@ -42,9 +42,10 @@ describe('ONLYOFFICE DOCX Integration Test', () => {
 
     const script = [
       "const fs = require('fs');",
-      "const { parseOffice } = require('officeparser-modern');",
-      "parseOffice(fs.readFileSync(process.argv[1]))",
-      "  .then((ast) => process.stdout.write(ast.toText()))",
+      "const { parseOffice } = require('officeparser-v8');",
+      "parseOffice(fs.readFileSync(process.argv[1]), { allowRemoteAssets: false })",
+      "  .then((ast) => ast.to('text', { textConfig: { preserveLayout: false } }))",
+      "  .then((result) => process.stdout.write(result.value))",
       "  .catch((error) => { console.error(error); process.exit(1); });",
     ].join('\n');
     const extractedText = execFileSync(process.execPath, ['-e', script, filePath], {

@@ -1,61 +1,62 @@
 // Вспомогательные функции для работы с файлами в кастомном ноде n8n
 import { createRequire } from 'module';
-import { parseOffice } from 'officeparser-modern';
+import { pathToFileURL } from 'url';
+import { parseOffice, type OfficeParserConfig } from 'officeparser-v8';
 
-const pdfWorkerSrc = createRequire(__filename).resolve(
-  'pdfjs-dist/legacy/build/pdf.worker.mjs',
-);
+/**
+ * Worker из той же копии pdf.js, которую грузит сам officeparser: n8n ставит её в
+ * officeparser-v8/node_modules, то есть по пути, которого не было ни в одной прошлой версии ноды.
+ * Адрес file: нужен officeparser, чтобы запускать pdf.js в отдельном процессе с лимитом памяти
+ * и времени, — враждебный PDF не уронит n8n.
+ */
+const pdfWorkerSrc = pathToFileURL(
+  createRequire(require.resolve('officeparser-v8')).resolve('pdfjs-dist/legacy/build/pdf.worker.mjs'),
+).href;
 
-type PdfJsWorkerModule = { WorkerMessageHandler?: unknown };
-
-type PdfJsModule = {
-  PDFWorker?: {
-    _setupFakeWorkerGlobal?: Promise<unknown>;
-  };
-};
+/** Предупреждения officeparser, при которых часть текста не прочитана или прочитана недостоверно. */
+const TEXT_LOSS_WARNINGS = new Set<string>([
+  'PDF_CONTENT_LIMIT_EXCEEDED',
+  'PDF_TEXT_ENCODING_SUSPECT',
+  'PDF_ASSET_UNAVAILABLE',
+  'PAGE_LOAD_FAILED',
+  'CONTENT_PART_NOT_READ',
+  'ALT_CHUNK_NOT_READ',
+  'TABLE_CELL_LIMIT_EXCEEDED',
+  'REPEATED_CONTENT_LIMIT_EXCEEDED',
+]);
 
 type PdfJsWorkerGlobal = typeof globalThis & { pdfjsWorker?: unknown };
 
-let pdfParseQueue: Promise<void> = Promise.resolve();
-
-export function refreshPdfJsWorkerCache(
-  pdfjs: PdfJsModule,
-  worker: PdfJsWorkerModule,
-): void {
-  if (!pdfjs.PDFWorker || !worker.WorkerMessageHandler) return;
-
-  Object.defineProperty(pdfjs.PDFWorker, '_setupFakeWorkerGlobal', {
-    value: Promise.resolve(worker.WorkerMessageHandler),
-    configurable: true,
-    writable: true,
-  });
+export interface OfficeExtraction {
+  text: string;
+  /** Что парсер пропустил, в виде `КОД: сообщение`; пусто, если документ прочитан целиком. */
+  warnings: string[];
 }
 
-function refreshInstalledPdfJsWorker(): void {
-  try {
-    const requireFromHelper = createRequire(__filename);
-    const pdfjs = requireFromHelper('pdfjs-dist/legacy/build/pdf.mjs') as PdfJsModule;
-    const worker = requireFromHelper(pdfWorkerSrc) as PdfJsWorkerModule;
-    refreshPdfJsWorkerCache(pdfjs, worker);
-  } catch {
-    // OfficeParser still receives an explicit worker path below.
-  }
+let pdfParseQueue: Promise<void> = Promise.resolve();
+
+async function parseToText(buffer: Buffer, config: OfficeParserConfig): Promise<OfficeExtraction> {
+  const ast = await parseOffice(buffer, config);
+  const { value } = await ast.to('text', { textConfig: { preserveLayout: false } });
+  const warnings = ast.warnings
+    .filter((issue) => TEXT_LOSS_WARNINGS.has(issue.code))
+    .map((issue) => `${issue.code}: ${issue.message}`);
+  return { text: value, warnings: [...new Set(warnings)] };
 }
 
 /**
  * Извлекает текст из буфера с помощью officeparser
- * 
+ *
  * @param buffer - Буфер с содержимым файла
- * @returns Promise с извлеченным текстом
+ * @returns Promise с извлеченным текстом и предупреждениями о пропущенном содержимом
  * @throws Error если файл не удалось обработать
  */
 export async function extractViaOfficeParser(
   buffer: Buffer,
   isolatePdfWorker = false,
-): Promise<string> {
+): Promise<OfficeExtraction> {
   if (!isolatePdfWorker) {
-    const ast = await parseOffice(buffer);
-    return ast.toText();
+    return parseToText(buffer, { allowRemoteAssets: false });
   }
 
   const previousParse = pdfParseQueue;
@@ -66,14 +67,14 @@ export async function extractViaOfficeParser(
 
   await previousParse;
 
+  // pdf.js прошлой версии ноды мог оставить в процессе свой worker. officeparser принял бы его
+  // за предзагруженный вызывающим кодом и разобрал PDF им — в этом процессе и с чужой версией API.
   const globalObject = globalThis as PdfJsWorkerGlobal;
   const previousWorker = globalObject.pdfjsWorker;
   globalObject.pdfjsWorker = undefined;
 
   try {
-    refreshInstalledPdfJsWorker();
-    const ast = await parseOffice(buffer, { pdfWorkerSrc });
-    return ast.toText();
+    return await parseToText(buffer, { allowRemoteAssets: false, pdfWorkerSrc });
   } finally {
     globalObject.pdfjsWorker = previousWorker;
     releaseParse();

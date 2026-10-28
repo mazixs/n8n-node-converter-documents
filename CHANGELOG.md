@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- RTF documents are read as text.
+- PDF, DOCX, PPTX and OpenDocument results now carry a warning when the parser left content out or could not read it faithfully, for example `PDF_CONTENT_LIMIT_EXCEEDED` when a PDF runs out of its time or text budget, or `PDF_TEXT_ENCODING_SUSPECT` when its fonts map glyphs to nothing readable. A warning is added only when there is one, so the version 5 output of an ordinary file is unchanged.
+
+### Changed
+
+- Document parsing moved from `officeparser` 6.0.7 to 8.4.0, installed under the new alias `officeparser-v8`. Plain text is rendered without layout padding, as before.
+- PDF.js now runs in a separate process with its own memory ceiling and CPU-time budget, so a hostile PDF can no longer exhaust the memory of the n8n process. Workers, character maps and image decoders are never fetched from a CDN.
+- `pdfjs-dist` is no longer a direct dependency. It comes with `officeparser` and lands in `officeparser-v8/node_modules`, a path no earlier version used, so an in-place update from the n8n UI does not pick up the PDF.js 5.5.207 module that 1.5.0 left in the ESM cache.
+- The installed package is larger: `officeparser` 8 depends on `tesseract.js` directly and ships browser bundles.
+
+### Security
+
+- Every PDF.js copy in the tree is now outside GHSA-hq66-cqwq-w95j: `officeparser` 8.4.0 pins 6.2.108, the first fixed version, and the only other copy is 5.4.624 from the optional `pdf-to-img`.
+- `@xmldom/xmldom` under `mammoth` updated from 0.8.13 to 0.8.15, which fixes the high-severity advisories against `<=0.8.14` (GHSA-6gmq-8vp8-gcm6 and related) that failed the `npm audit` gate.
+
+### Tests
+
+- The in-place update test now loads the node over the PDF.js API and worker that 1.5.0 leaves in a running process and parses a real PDF through them.
+- Added real-file tests for RTF and checks that the PDF worker comes from the parser's own PDF.js copy.
+
 ## [1.5.0] - 2026-08-13
 
 ### Added
