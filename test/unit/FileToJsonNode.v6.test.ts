@@ -20,6 +20,7 @@ jest.mock('../../src/strategies', () => ({
     json: jest.fn(),
     xml: jest.fn(),
     xlsx: jest.fn(),
+    xlsb: jest.fn(),
     csv: jest.fn(),
   },
 }));
@@ -462,6 +463,30 @@ describe('FileToJsonNode version 6', () => {
       code: 'ARCHIVE_LIMIT_EXCEEDED',
     });
     expect(mockStrategies.docx).not.toHaveBeenCalled();
+  });
+
+  it('checks an XLSB file as a ZIP archive before parsing', async () => {
+    const buffer = fs.readFileSync(path.join(__dirname, '../samples/sheet-cells.xlsb'));
+    const ctx = createContext({
+      items: [{ json: {}, binary: { data: binary('report.xlsb') } }],
+      buffers: [buffer],
+      params: { advancedOptions: { maxArchiveEntries: 1 } },
+      continueOnFail: true,
+    });
+    // file-type не знает XLSB и называет его просто zip, поэтому формат берётся из имени.
+    mockFileTypeFromBuffer.mockResolvedValue({ ext: 'zip', mime: 'application/zip' });
+    mockStrategies.xlsb.mockResolvedValue({ sheets: { Sheet1: [] } });
+
+    const [output] = await node.execute.call(ctx as unknown as IExecuteFunctions);
+    const document = output[0].json.document as {
+      error: { stage: string; code: string };
+    };
+
+    expect(document.error).toMatchObject({
+      stage: 'check_limits',
+      code: 'ARCHIVE_LIMIT_EXCEEDED',
+    });
+    expect(mockStrategies.xlsb).not.toHaveBeenCalled();
   });
 
   it('uses local OCR for an image-only PDF and releases resources', async () => {

@@ -52,7 +52,7 @@ One input file becomes one output item, so the rest of the workflow reads it dir
 {{ $json.document.text }}                   // extracted content
 {{ $json.document.metadata.fileType }}      // format actually detected
 {{ $json.document.data }}                   // parsed object for JSON/XML/YML
-{{ $json.document.sheets.Sheet1[0].A }}     // XLSX cell, keys are column letters
+{{ $json.document.sheets.Sheet1[0].A }}     // XLSX/XLSB/XLS cell, keys are column letters
 {{ $json.document.sheets.Sheet1[0].email }} // CSV row, keys come from the header
 ```
 
@@ -63,11 +63,19 @@ For a document set feeding an LLM, switch **Output Format** to `Markdown`; table
 | Group | Formats | What you get |
 | --- | --- | --- |
 | Documents | DOCX, PDF, RTF, TXT, MD, Markdown | `document.text`; DOCX additionally offers HTML and Markdown |
-| Spreadsheets | XLSX, CSV | `document.sheets` — named sheets of row objects; XLSX keys are column letters, CSV keys come from the header row |
+| Spreadsheets | XLSX, XLSB, XLS, CSV | `document.sheets` — named sheets of row objects; workbook keys are column letters, CSV keys come from the header row |
 | OpenDocument | ODT, ODS, ODP | `document.text` — ODS included, it is extracted as text rather than rows |
 | Presentations | PPTX | `document.text` |
 | Data | JSON, XML, YML | `document.text` plus `document.data` with the parsed value |
 | Web | HTML, HTM | `document.text` — body text, whitespace normalized |
+
+Workbooks (XLSX, XLSB and legacy binary XLS) are read by content, so a file with the wrong extension still opens. Each sheet becomes an array of rows in sheet order, hidden sheets included; chart sheets hold no cells and are left out. Within a row:
+
+- text is trimmed, and a cell that holds only whitespace is dropped;
+- dates and times become ISO 8601 strings in UTC; a time without a date lands on `1899-12-30`;
+- numbers, booleans and formula results keep their type, the formula itself is not returned;
+- an error cell such as `#DIV/0!` is dropped in XLSX, while XLSB and XLS return it as text;
+- empty rows and empty cells are left out, so a row object carries only the columns that hold data.
 
 Yandex Market YML catalogs are recognized and normalized into shop info, currencies, categories, offers and counters rather than dumped as raw XML.
 
@@ -165,7 +173,7 @@ Version 6 keeps limits under **Advanced Options**. Where noted, `0` disables the
 | --- | --- | --- |
 | Max File Size (MB) | 50 | Input size ceiling; `0` for none |
 | Max Concurrency | 4 | Input files processed in parallel |
-| Max Rows per Sheet | 100000 | CSV and XLSX row cap; `0` for unlimited |
+| Max Rows per Sheet | 100000 | CSV, XLSX, XLSB and XLS row cap; `0` for unlimited |
 | Max TXT Characters | 1000000 | Plain-text character cap; `0` for unlimited |
 | Max Output Characters | 1000000 | Text is truncated with a warning, structured output fails with `OUTPUT_LIMIT_EXCEEDED`; `0` for unlimited |
 | Max Archive Entries | 10000 | Entries allowed in an Office container; `0` for unlimited |
@@ -173,6 +181,8 @@ Version 6 keeps limits under **Advanced Options**. Where noted, `0` disables the
 | Max Compression Ratio | 100 | Expanded-to-compressed ratio, per entry and per archive; `0` for unlimited |
 
 PDF text is read by PDF.js in a separate process with its own memory ceiling (1 GB) and a CPU-time budget of 5 seconds plus 20 ms per KB of the file, so a hostile PDF cannot exhaust n8n's memory or stall it. A document that runs out of that budget is returned as far as it was read, with `PDF_CONTENT_LIMIT_EXCEEDED` in `warnings`. These budgets are not configurable yet.
+
+Workbook reading carries built-in bounds from the `hucre` engine that are not configurable here yet: an XLSX or XLS sheet is capped at 20 million cells of its used range, and no entry of an XLSX or XLSB container may expand past 2 GiB. A file past either bound fails with `PROCESSING_FAILED`. XLSB sheets have no cell cap of their own, so for them **Max File Size** and the archive limits above are the bound. **Max Rows per Sheet** limits the output on top of all of this.
 
 Two more choices sit outside that collection. **Output Format** applies to DOCX and selects plain text, HTML or Markdown. **JSON Output Mode** defaults to `Preserve Structure`; `Flatten` rewrites nested keys as dotted paths.
 
@@ -225,6 +235,7 @@ Report vulnerabilities privately through the repository's GitHub security adviso
 | `ARCHIVE_LIMIT_EXCEEDED` | Inspect the document before raising ZIP limits; this is what a bomb looks like |
 | `OUTPUT_LIMIT_EXCEEDED` | Raise **Max Output Characters** or split the input into smaller batches |
 | Legacy DOC or PPT rejected | Re-save as DOCX or PPTX; the binary formats are not parsed |
+| `#DIV/0!` or `#N/A` in a cell value | A formula error. XLSX drops these; XLSB and XLS return them as text — filter them downstream if needed |
 | Wrong format detected | The signature won over the extension — check `metadata.detectedMime` and `warnings` |
 
 ## Development

@@ -2,7 +2,7 @@
  * Convert File to JSON
  * ─────────────────────────────────────────────────────────
  * Универсальный кастом-нод для n8n.
- * Поддерживает: DOC, DOCX, XML, YML, XLSX, CSV, PDF, TXT, MD,
+ * Поддерживает: DOC, DOCX, XML, YML, XLSX, XLSB, XLS, CSV, PDF, TXT, MD,
  *               PPT, PPTX, HTML / HTM, ODT, ODP, ODS, RTF, JSON.
  * Выход: { text: "..."} либо { sheets: {...} } + metadata.
  */
@@ -44,7 +44,7 @@ export class ConvertFileToJson implements INodeType {
     group: ["transform"],
     version: [5, 6],
     description:
-      "Extracts text, HTML, or Markdown from documents (DOCX, PDF, PPTX, ODT, RTF, HTML, TXT, MD) and reads table rows from spreadsheets (XLSX, CSV), " +
+      "Extracts text, HTML, or Markdown from documents (DOCX, PDF, PPTX, ODT, RTF, HTML, TXT, MD) and reads table rows from spreadsheets (XLSX, XLSB, XLS, CSV), " +
       "also parsing JSON, XML, and Yandex Market YML into structured data",
     // Output Format only affects DOCX parsing, so only advertise it on the canvas
     // when the user picked a non-default value (html/markdown); for every other
@@ -165,7 +165,7 @@ export class ConvertFileToJson implements INodeType {
             name: 'maxRows',
             type: 'number',
             default: 100000,
-            description: 'CSV/XLSX row limit per sheet; use 0 for unlimited',
+            description: 'CSV/XLSX/XLSB/XLS row limit per sheet; use 0 for unlimited',
             typeOptions: { minValue: 0 },
           },
           {
@@ -352,7 +352,7 @@ export class ConvertFileToJson implements INodeType {
         size: buf.length,
       });
 
-      if (['docx', 'xlsx', 'pptx', 'odt', 'ods', 'odp'].includes(ext)) {
+      if (['docx', 'xlsx', 'xlsb', 'pptx', 'odt', 'ods', 'odp'].includes(ext)) {
         await validateZipArchive(buf, {
           maxEntries: 10_000,
           maxUncompressedBytes: 200 * 1024 * 1024,

@@ -47,9 +47,15 @@ module.exports = {
       lines: 90,
     },
   },
-  moduleFileExtensions: ['ts', 'js', 'json'],
+  moduleFileExtensions: ['ts', 'js', 'mjs', 'json'],
   transform: {
     '^.+\\.ts$': 'ts-jest',
+    // hucre публикуется только как ESM; Node грузит его через require(esm), а Jest так не умеет.
+    // Поэтому в тестах его .mjs транспилируются в CommonJS.
+    '^.+\\.mjs$': ['ts-jest', {
+      tsconfig: { allowJs: true, isolatedModules: true, module: 'commonjs', target: 'ES2022' },
+    }],
   },
+  transformIgnorePatterns: ['/node_modules/(?!hucre/)'],
   testTimeout: 30000,
 };
