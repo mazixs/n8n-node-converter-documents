@@ -1,7 +1,7 @@
 // Вспомогательные функции для работы с файлами в кастомном ноде n8n
 import { createRequire } from 'module';
 import { pathToFileURL } from 'url';
-import { parseOffice, type OfficeParserConfig } from 'officeparser-v8';
+import type { OfficeParserConfig } from 'officeparser-v8';
 
 /**
  * Worker из той же копии pdf.js, которую грузит сам officeparser: n8n ставит её в
@@ -36,6 +36,8 @@ export interface OfficeExtraction {
 let pdfParseQueue: Promise<void> = Promise.resolve();
 
 async function parseToText(buffer: Buffer, config: OfficeParserConfig): Promise<OfficeExtraction> {
+  // officeparser грузится при первом документе, а не вместе с нодой: n8n загружает ноды при старте.
+  const { parseOffice } = await import('officeparser-v8');
   const ast = await parseOffice(buffer, config);
   const { value } = await ast.to('text', { textConfig: { preserveLayout: false } });
   const warnings = ast.warnings

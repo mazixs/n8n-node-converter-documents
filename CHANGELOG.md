@@ -10,6 +10,7 @@
 
 ### Changed
 
+- The node loads about 350 ms faster when n8n starts: `officeparser`, `hucre` and `mammoth` are now loaded on the first file of their format instead of with the node.
 - Spreadsheet reading moved from `read-excel-file` to `hucre`, which also reads XLSB and XLS. The row-object shape is unchanged: keys are column letters, text is trimmed, blank cells are dropped, dates and times are ISO 8601 UTC, and a time without a date lands on 1899-12-30. Error cells are dropped in XLSX, as before; XLSB and XLS return them as text.
 - Document parsing moved from `officeparser` 6.0.7 to 8.4.0, installed under the new alias `officeparser-v8`. Plain text is rendered without layout padding, as before.
 - PDF.js now runs in a separate process with its own memory ceiling and CPU-time budget, so a hostile PDF can no longer exhaust the memory of the n8n process. Workers, character maps and image decoders are never fetched from a CDN.

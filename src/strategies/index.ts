@@ -1,6 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
-import mammoth from "mammoth";
-import { read as readSpreadsheet, type CellValue, type ReadWarning, type Sheet, type Workbook } from "hucre";
+// mammoth и hucre грузятся при первом файле своего формата, а не вместе с нодой:
+// n8n загружает ноды при старте, а эти парсеры тяжёлые.
+import type { CellValue, ReadWarning, Sheet, Workbook } from "hucre";
 import { parse as parseHtml } from 'node-html-parser-modern';
 import chardet from "chardet";
 import Papa from "papaparse";
@@ -211,6 +212,7 @@ function spreadsheetStrategy(format: string): StrategyFn {
     try {
       // Иначе hucre прочитал бы любой текст как CSV.
       if (!isSpreadsheetContainer(buf)) throw new Error('the file is not an XLSX, XLSB or XLS workbook');
+      const { read: readSpreadsheet } = await import("hucre");
       workbook = await readSpreadsheet(buf, {
         onWarning: (warning) => {
           if (!SPREADSHEET_LOSS_WARNINGS.has(warning.code)) return;
@@ -311,6 +313,7 @@ export const strategies = {
     
     if (outputFormat === 'html' || outputFormat === 'markdown') {
       try {
+        const { default: mammoth } = await import("mammoth");
         const result = await mammoth.convertToHtml({ buffer: buf });
         if (result.value && result.value.trim().length > 0) {
           if (outputFormat === 'markdown') {
@@ -335,6 +338,7 @@ export const strategies = {
     
     // Попытка 2: mammoth (text)
     try {
+      const { default: mammoth } = await import("mammoth");
       const result = await mammoth.extractRawText({ buffer: buf });
       if (result.value && result.value.trim().length > 0) {
         return { text: result.value };
